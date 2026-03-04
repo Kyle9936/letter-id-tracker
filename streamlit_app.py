@@ -2,7 +2,8 @@ import streamlit as st
 import pandas as pd
 import altair as alt
 from streamlit_gsheets import GSheetsConnection
-from openai import OpenAI
+from google import genai
+from google.genai import types
 
 st.set_page_config(
     page_title="Letter ID progress tracker",
@@ -49,7 +50,7 @@ with st.sidebar:
         selection_mode="multi",
         default=["Total Letter ID %", "Letter Sound %"],
     )
-    openai_api_key = st.secrets.get("OPENAI_API_KEY", "")
+    openai_api_key = st.secrets.get("GEMINI_API_KEY", "")
 
 if not selected_students:
     st.warning("Select at least one student.")
@@ -273,7 +274,7 @@ with tab_cohort:
 
 with tab_chat:
     if not openai_api_key:
-        st.info("Enter your OpenAI API key in the sidebar to start asking questions about your data.", icon=":material/key:")
+        st.info("Add your Gemini API key to Streamlit secrets (GEMINI_API_KEY) to start asking questions about your data.", icon=":material/key:")
     else:
         if "chat_messages" not in st.session_state:
             st.session_state.chat_messages = []
@@ -306,18 +307,21 @@ with tab_chat:
             with st.chat_message("user"):
                 st.markdown(prompt)
 
-            client = OpenAI(api_key=openai_api_key)
-            messages = [{"role": "system", "content": system_prompt}] + [
-                {"role": m["role"], "content": m["content"]}
+            client = genai.Client(api_key=openai_api_key)
+            contents = [
+                types.Content(role="user" if m["role"] == "user" else "model", parts=[types.Part.from_text(text=m["content"])])
                 for m in st.session_state.chat_messages
             ]
 
             with st.chat_message("assistant"):
-                response = client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=messages,
+                response = client.models.generate_content(
+                    model="gemini-2.0-flash",
+                    contents=contents,
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_prompt,
+                    ),
                 )
-                reply = response.choices[0].message.content
+                reply = response.text
                 st.markdown(reply)
 
             st.session_state.chat_messages.append({"role": "assistant", "content": reply})
