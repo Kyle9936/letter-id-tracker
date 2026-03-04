@@ -49,9 +49,7 @@ with st.sidebar:
         selection_mode="multi",
         default=["Total Letter ID %", "Letter Sound %"],
     )
-    st.header("Ask Your Data", divider=True)
-    default_key = st.secrets.get("OPENAI_API_KEY", "")
-    openai_api_key = st.text_input("OpenAI API Key", value=default_key, type="password", help="Enter your OpenAI API key to enable the chat feature.")
+    openai_api_key = st.secrets.get("OPENAI_API_KEY", "")
 
 if not selected_students:
     st.warning("Select at least one student.")
