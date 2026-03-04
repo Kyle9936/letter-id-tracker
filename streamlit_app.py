@@ -147,6 +147,8 @@ with tab_individual:
         )
         student_melted["Label"] = student_melted["Score (%)"].round(0).astype(int).astype(str) + "%"
 
+        metric_order = ["Total Letter ID %", "Letter Sound %"]
+
         with st.container(border=True):
             st.markdown(f"**{student}**")
 
@@ -156,8 +158,8 @@ with tab_individual:
                 .encode(
                     x=alt.X("Week Label:O", title="Week", sort=alt.SortField("Week"), axis=alt.Axis(labelAngle=0)),
                     y=alt.Y("Score (%):Q", title="Score (%)", scale=alt.Scale(domain=[0, 100])),
-                    color=alt.Color("Metric:N"),
-                    xOffset="Metric:N",
+                    color=alt.Color("Metric:N", sort=metric_order),
+                    xOffset=alt.XOffset("Metric:N", sort=metric_order),
                     tooltip=["Week Label", "Metric", "Score (%)"],
                 )
             )
@@ -169,7 +171,7 @@ with tab_individual:
                     x=alt.X("Week Label:O", sort=alt.SortField("Week")),
                     y=alt.Y("Score (%):Q"),
                     text="Label:N",
-                    xOffset="Metric:N",
+                    xOffset=alt.XOffset("Metric:N", sort=metric_order),
                 )
             )
 
@@ -232,14 +234,16 @@ with tab_cohort:
     with st.container(border=True):
         st.markdown(f"**All selected students** ({len(selected_students)} students)")
 
+        cohort_metric_order = ["Total Letter ID %", "Letter Sound %"]
+
         cohort_bars = (
             alt.Chart(cohort_melted)
             .mark_bar()
             .encode(
                 x=alt.X("Week Label:O", title="Week", sort=alt.SortField("Week"), axis=alt.Axis(labelAngle=0)),
                 y=alt.Y("Score (%):Q", title="Avg Score (%)", scale=alt.Scale(domain=[0, 100])),
-                color=alt.Color("Metric:N"),
-                xOffset="Metric:N",
+                color=alt.Color("Metric:N", sort=cohort_metric_order),
+                xOffset=alt.XOffset("Metric:N", sort=cohort_metric_order),
                 tooltip=["Week Label", "Metric", "Score (%)"],
             )
         )
@@ -251,7 +255,7 @@ with tab_cohort:
                 x=alt.X("Week Label:O", sort=alt.SortField("Week")),
                 y=alt.Y("Score (%):Q"),
                 text="Label:N",
-                xOffset="Metric:N",
+                xOffset=alt.XOffset("Metric:N", sort=cohort_metric_order),
             )
         )
 
