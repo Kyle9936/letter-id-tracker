@@ -119,7 +119,7 @@ def progress_bar_html(val):
 tab_scorecard, tab_individual, tab_cohort = st.tabs(["Student Scorecard", "Individual Progress", "Cohort Progress"])
 
 with tab_scorecard:
-    st.subheader(f"Student scorecard - {most_recent_date}")
+    st.subheader(f"Student Scorecard - {most_recent_date}")
     for idx, (_, row) in enumerate(latest.iterrows()):
         with st.container(border=True):
             st.markdown(f"**{row['Student Name']}**")
