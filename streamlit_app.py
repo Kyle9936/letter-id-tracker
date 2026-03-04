@@ -12,7 +12,19 @@ st.set_page_config(
 st.title("Letter Identification Progress Tracker")
 
 st.markdown(
-    '<style>[data-testid="manage-app-button"] {display: none;} .stAppDeployButton {display: none;} [data-testid="stStatusWidget"] {display: none;}</style>',
+    """<style>
+    [data-testid="manage-app-button"] {display: none;}
+    .stAppDeployButton {display: none;}
+    [data-testid="stStatusWidget"] {display: none;}
+    .reportview-container .main footer {display: none;}
+    footer {display: none;}
+    #MainMenu {display: none;}
+    header [data-testid="stToolbar"] {display: none;}
+    ._container_gzau3_1 {display: none;}
+    ._link_gzau3_10 {display: none;}
+    .viewerBadge_container__r5tak {display: none;}
+    .viewerBadge_link__qRIco {display: none;}
+    </style>""",
     unsafe_allow_html=True,
 )
 
