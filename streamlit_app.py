@@ -268,6 +268,3 @@ with tab_cohort:
             f'</table></div>'
         )
         st.markdown(cohort_html, unsafe_allow_html=True)
-
-with st.expander("Raw data", icon=":material/table:"):
-    st.dataframe(filtered, hide_index=True, use_container_width=True)
