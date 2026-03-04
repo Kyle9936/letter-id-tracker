@@ -159,9 +159,16 @@ with tab_individual:
             table_df = student_df[display_cols].sort_values("Week").reset_index(drop=True)
             table_df["Week"] = table_df["Week"].dt.strftime("%b %d, %Y")
 
+            header_cols = ["Week", "Uppercase ID", "Lowercase ID"]
+            if "Total Letter ID %" in metrics:
+                header_cols.append("Total Letter ID %")
+            header_cols.append("Sound Total")
+            if "Letter Sound %" in metrics:
+                header_cols.append("Letter Sound %")
+
             header_row = "".join(
                 f'<th style="text-align:left;padding:8px 12px;border-bottom:2px solid #ddd;font-size:13px;">{c}</th>'
-                for c in ["Week", "Uppercase ID", "Lowercase ID", "Sound Total"] + [m for m in metrics if m in table_df.columns]
+                for c in header_cols
             )
 
             body_rows = ""
@@ -170,11 +177,12 @@ with tab_individual:
                     f'<td style="padding:6px 12px;font-size:13px;">{r["Week"]}</td>'
                     f'<td style="padding:6px 12px;font-size:13px;">{int(r["Uppercase"])}</td>'
                     f'<td style="padding:6px 12px;font-size:13px;">{int(r["Lowercase"])}</td>'
-                    f'<td style="padding:6px 12px;font-size:13px;">{int(r["Sound Total"])}</td>'
                 )
-                for m in metrics:
-                    if m in table_df.columns:
-                        cells += f'<td style="padding:6px 12px;min-width:140px;">{progress_bar_html(r[m])}</td>'
+                if "Total Letter ID %" in metrics:
+                    cells += f'<td style="padding:6px 12px;min-width:140px;">{progress_bar_html(r["Total Letter ID %"])}</td>'
+                cells += f'<td style="padding:6px 12px;font-size:13px;">{int(r["Sound Total"])}</td>'
+                if "Letter Sound %" in metrics:
+                    cells += f'<td style="padding:6px 12px;min-width:140px;">{progress_bar_html(r["Letter Sound %"])}</td>'
                 body_rows += f"<tr>{cells}</tr>"
 
             html_table = (
@@ -232,20 +240,26 @@ with tab_cohort:
         cohort_table_df = cohort_df.copy()
         cohort_table_df["Week"] = cohort_table_df["Week"].dt.strftime("%b %d, %Y")
 
+        cohort_header_cols = ["Week"]
+        if "Total Letter ID %" in metrics:
+            cohort_header_cols.append("Total Letter ID %")
+        cohort_header_cols.append("Avg Sound Total")
+        if "Letter Sound %" in metrics:
+            cohort_header_cols.append("Letter Sound %")
+
         cohort_header = "".join(
             f'<th style="text-align:left;padding:8px 12px;border-bottom:2px solid #ddd;font-size:13px;">{c}</th>'
-            for c in ["Week", "Avg Sound Total"] + [m for m in metrics if m in cohort_table_df.columns]
+            for c in cohort_header_cols
         )
 
         cohort_body = ""
         for _, r in cohort_table_df.iterrows():
-            cells = (
-                f'<td style="padding:6px 12px;font-size:13px;">{r["Week"]}</td>'
-                f'<td style="padding:6px 12px;font-size:13px;">{r["Sound Total"]:.1f}</td>'
-            )
-            for m in metrics:
-                if m in cohort_table_df.columns:
-                    cells += f'<td style="padding:6px 12px;min-width:140px;">{progress_bar_html(r[m])}</td>'
+            cells = f'<td style="padding:6px 12px;font-size:13px;">{r["Week"]}</td>'
+            if "Total Letter ID %" in metrics:
+                cells += f'<td style="padding:6px 12px;min-width:140px;">{progress_bar_html(r["Total Letter ID %"])}</td>'
+            cells += f'<td style="padding:6px 12px;font-size:13px;">{r["Sound Total"]:.1f}</td>'
+            if "Letter Sound %" in metrics:
+                cells += f'<td style="padding:6px 12px;min-width:140px;">{progress_bar_html(r["Letter Sound %"])}</td>'
             cohort_body += f"<tr>{cells}</tr>"
 
         cohort_html = (
