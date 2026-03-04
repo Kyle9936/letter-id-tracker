@@ -24,6 +24,10 @@ st.markdown(
     ._link_gzau3_10 {display: none;}
     .viewerBadge_container__r5tak {display: none;}
     .viewerBadge_link__qRIco {display: none;}
+    [data-testid="stMainMenu"] {display: none;}
+    [data-testid="baseButton-header"] {display: none;}
+    .stMainMenu {display: none;}
+    header {visibility: hidden;}
     </style>""",
     unsafe_allow_html=True,
 )
