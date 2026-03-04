@@ -11,6 +11,11 @@ st.set_page_config(
 
 st.title("Letter Identification Progress Tracker")
 
+st.markdown(
+    '<style>[data-testid="manage-app-button"] {display: none;}</style>',
+    unsafe_allow_html=True,
+)
+
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1Fegdy8X2EqHGSOyvOTeU_TM4sRYSp1vECd8BTzNwKkw/edit?usp=sharing"
 
 conn = st.connection("gsheets", type=GSheetsConnection)
