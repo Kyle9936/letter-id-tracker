@@ -155,13 +155,13 @@ with tab_individual:
             chart = bars + labels
             st.altair_chart(chart, use_container_width=True)
 
-            display_cols = ["Week", "Uppercase", "Lowercase"] + [m for m in metrics]
+            display_cols = ["Week", "Uppercase", "Lowercase", "Sound Total"] + [m for m in metrics]
             table_df = student_df[display_cols].sort_values("Week").reset_index(drop=True)
             table_df["Week"] = table_df["Week"].dt.strftime("%b %d, %Y")
 
             header_row = "".join(
                 f'<th style="text-align:left;padding:8px 12px;border-bottom:2px solid #ddd;font-size:13px;">{c}</th>'
-                for c in ["Week", "Uppercase ID", "Lowercase ID"] + [m for m in metrics if m in table_df.columns]
+                for c in ["Week", "Uppercase ID", "Lowercase ID", "Sound Total"] + [m for m in metrics if m in table_df.columns]
             )
 
             body_rows = ""
@@ -170,6 +170,7 @@ with tab_individual:
                     f'<td style="padding:6px 12px;font-size:13px;">{r["Week"]}</td>'
                     f'<td style="padding:6px 12px;font-size:13px;">{int(r["Uppercase"])}</td>'
                     f'<td style="padding:6px 12px;font-size:13px;">{int(r["Lowercase"])}</td>'
+                    f'<td style="padding:6px 12px;font-size:13px;">{int(r["Sound Total"])}</td>'
                 )
                 for m in metrics:
                     if m in table_df.columns:
@@ -187,7 +188,7 @@ with tab_individual:
 
 with tab_cohort:
     cohort_df = filtered.groupby(["Week", "Week Label"], as_index=False)[
-        ["Total Letter ID %", "Letter Sound %"]
+        ["Sound Total", "Total Letter ID %", "Letter Sound %"]
     ].mean().round(1)
     cohort_df = cohort_df.sort_values("Week")
 
@@ -233,12 +234,15 @@ with tab_cohort:
 
         cohort_header = "".join(
             f'<th style="text-align:left;padding:8px 12px;border-bottom:2px solid #ddd;font-size:13px;">{c}</th>'
-            for c in ["Week"] + [m for m in metrics if m in cohort_table_df.columns]
+            for c in ["Week", "Avg Sound Total"] + [m for m in metrics if m in cohort_table_df.columns]
         )
 
         cohort_body = ""
         for _, r in cohort_table_df.iterrows():
-            cells = f'<td style="padding:6px 12px;font-size:13px;">{r["Week"]}</td>'
+            cells = (
+                f'<td style="padding:6px 12px;font-size:13px;">{r["Week"]}</td>'
+                f'<td style="padding:6px 12px;font-size:13px;">{r["Sound Total"]:.1f}</td>'
+            )
             for m in metrics:
                 if m in cohort_table_df.columns:
                     cells += f'<td style="padding:6px 12px;min-width:140px;">{progress_bar_html(r[m])}</td>'
