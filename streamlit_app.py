@@ -25,7 +25,7 @@ if df is None or df.empty:
     st.warning("No data found in the Google Sheet.")
     st.stop()
 
-required_cols = ["Student Name", "Week", "Uppercase", "Lowercase", "Letter Sound"]
+required_cols = ["Student Name", "Week", "Uppercase", "Lowercase", "Sound Total", "Letter Sound"]
 missing = [c for c in required_cols if c not in df.columns]
 if missing:
     st.error(f"Missing columns: {', '.join(missing)}")
@@ -102,15 +102,16 @@ with tab_scorecard:
     for idx, (_, row) in enumerate(latest.iterrows()):
         with st.container(border=True):
             st.markdown(f"**{row['Student Name']}**")
-            cols = st.columns(4)
+            cols = st.columns(5)
             cols[0].metric("Uppercase ID", f"{int(row['Uppercase'])}/26")
             cols[1].metric("Lowercase ID", f"{int(row['Lowercase'])}/26")
             tid = row['Total Letter ID %']
             with cols[2]:
                 with st.container(key=f"tid_{idx}"):
                     st.metric("Total Letter ID", f"{tid:.0f}%")
+            cols[3].metric("Sound Total", f"{int(row['Sound Total'])}/26")
             ls = row['Letter Sound %']
-            with cols[3]:
+            with cols[4]:
                 with st.container(key=f"ls_{idx}"):
                     st.metric("Letter Sound", f"{ls:.0f}%")
 
