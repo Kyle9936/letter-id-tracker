@@ -28,6 +28,8 @@ st.markdown(
     [data-testid="baseButton-header"] {display: none;}
     .stMainMenu {display: none;}
     header {visibility: hidden;}
+    .stBottom > div {display: none;}
+    [data-testid="stBottom"] {display: none;}
     </style>""",
     unsafe_allow_html=True,
 )
