@@ -124,7 +124,7 @@ def parse_known_letters(val):
         return set()
     return {l.strip().upper() for l in str(val).split(",")}
 
-def letter_grid_html(title, known_set):
+def letter_grid_html(title, known_set, lowercase=False):
     cells = ""
     for letter in LETTERS:
         if letter in known_set:
@@ -133,11 +133,12 @@ def letter_grid_html(title, known_set):
         else:
             bg = "#EF9A9A"
             color = "#fff"
+        display = letter.lower() if lowercase else letter
         cells += (
             f'<div style="display:inline-flex;align-items:center;justify-content:center;'
             f'width:36px;height:36px;margin:2px;border-radius:4px;'
             f'background:{bg};color:{color};font-weight:600;font-size:14px;">'
-            f'{letter}</div>'
+            f'{display}</div>'
         )
     count = len(known_set)
     return (
@@ -414,7 +415,7 @@ with tab_letters:
                 st.markdown(f"**{selected_student_detail}**")
                 st.markdown(
                     letter_grid_html("Uppercase Letters", known_upper)
-                    + letter_grid_html("Lowercase Letters", known_lower)
+                    + letter_grid_html("Lowercase Letters", known_lower, lowercase=True)
                     + letter_grid_html("Letter Sounds", known_sounds),
                     unsafe_allow_html=True,
                 )
@@ -467,7 +468,7 @@ with tab_pdf:
                 known_lower = parse_known_letters(row.get("Known Lowercase", ""))
                 known_sounds = parse_known_letters(row.get("Known Sounds", ""))
 
-                for label, known in [("Uppercase Letters", known_upper), ("Lowercase Letters", known_lower), ("Letter Sounds", known_sounds)]:
+                for label, known, is_lower in [("Uppercase Letters", known_upper, False), ("Lowercase Letters", known_lower, True), ("Letter Sounds", known_sounds, False)]:
                     pdf.set_font("Helvetica", "B", 12)
                     pdf.cell(0, 8, f"{label} ({len(known)}/26)", new_x="LMARGIN", new_y="NEXT")
                     pdf.set_font("Helvetica", "", 10)
@@ -479,7 +480,8 @@ with tab_pdf:
                         else:
                             pdf.set_fill_color(239, 154, 154)
                             pdf.set_text_color(255, 255, 255)
-                        pdf.cell(14, 14, letter, border=0, fill=True, align="C")
+                        display = letter.lower() if is_lower else letter
+                        pdf.cell(14, 14, display, border=0, fill=True, align="C")
                         if (i + 1) % 13 == 0:
                             pdf.ln()
                     pdf.set_text_color(0, 0, 0)
