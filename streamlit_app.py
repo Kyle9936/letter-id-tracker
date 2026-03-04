@@ -9,7 +9,7 @@ st.set_page_config(
     layout="wide",
 )
 
-st.title("Letter identification progress tracker")
+st.title("Letter Identification Progress Tracker")
 
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1Fegdy8X2EqHGSOyvOTeU_TM4sRYSp1vECd8BTzNwKkw/edit?usp=sharing"
 
