@@ -12,7 +12,7 @@ st.set_page_config(
 st.title("Letter Identification Progress Tracker")
 
 st.markdown(
-    '<style>[data-testid="manage-app-button"] {display: none;}</style>',
+    '<style>[data-testid="manage-app-button"] {display: none;} .stAppDeployButton {display: none;} [data-testid="stStatusWidget"] {display: none;}</style>',
     unsafe_allow_html=True,
 )
 
