@@ -2,8 +2,6 @@ import streamlit as st
 import pandas as pd
 import altair as alt
 from streamlit_gsheets import GSheetsConnection
-from google import genai
-from google.genai import types
 
 st.set_page_config(
     page_title="Letter ID progress tracker",
@@ -50,7 +48,6 @@ with st.sidebar:
         selection_mode="multi",
         default=["Total Letter ID %", "Letter Sound %"],
     )
-    openai_api_key = st.secrets.get("GEMINI_API_KEY", "")
 
 if not selected_students:
     st.warning("Select at least one student.")
@@ -96,7 +93,7 @@ def progress_bar_html(val):
         f'</div>'
     )
 
-tab_scorecard, tab_individual, tab_cohort, tab_chat = st.tabs(["Student Scorecard", "Individual Progress", "Cohort Progress", "Ask Your Data"])
+tab_scorecard, tab_individual, tab_cohort = st.tabs(["Student Scorecard", "Individual Progress", "Cohort Progress"])
 
 with tab_scorecard:
     st.subheader(f"Student scorecard - {most_recent_date}")
@@ -271,65 +268,6 @@ with tab_cohort:
             f'</table></div>'
         )
         st.markdown(cohort_html, unsafe_allow_html=True)
-
-with tab_chat:
-    if not openai_api_key:
-        st.info("Add your Gemini API key to Streamlit secrets (GEMINI_API_KEY) to start asking questions about your data.", icon=":material/key:")
-    else:
-        if "chat_messages" not in st.session_state:
-            st.session_state.chat_messages = []
-
-        data_summary = filtered.to_csv(index=False)
-
-        system_prompt = (
-            "You are a helpful teaching assistant analyzing student letter identification progress data. "
-            "You have access to the following student data:\n\n"
-            f"{data_summary}\n\n"
-            "Columns explained:\n"
-            "- Student Name: the student's name\n"
-            "- Week: the date of the assessment\n"
-            "- Uppercase: number of uppercase letters identified (out of 26)\n"
-            "- Lowercase: number of lowercase letters identified (out of 26)\n"
-            "- Letter Sound: number of letter sounds identified (out of 26)\n"
-            "- Total Letter ID %: combined uppercase + lowercase as a percentage of 52\n"
-            "- Letter Sound %: letter sounds as a percentage of 26\n\n"
-            "Answer questions clearly and concisely. When discussing performance, reference the color thresholds: "
-            "green (80%+), yellow (65-79%), orange (40-64%), red (below 40%). "
-            "Provide actionable insights when possible."
-        )
-
-        for msg in st.session_state.chat_messages:
-            with st.chat_message(msg["role"]):
-                st.markdown(msg["content"])
-
-        if prompt := st.chat_input("Ask a question about your student data..."):
-            st.session_state.chat_messages.append({"role": "user", "content": prompt})
-            with st.chat_message("user"):
-                st.markdown(prompt)
-
-            client = genai.Client(api_key=openai_api_key)
-            contents = [
-                types.Content(role="user" if m["role"] == "user" else "model", parts=[types.Part.from_text(text=m["content"])])
-                for m in st.session_state.chat_messages
-            ]
-
-            with st.chat_message("assistant"):
-                try:
-                    response = client.models.generate_content(
-                        model="gemini-2.0-flash",
-                        contents=contents,
-                        config=types.GenerateContentConfig(
-                            system_instruction=system_prompt,
-                        ),
-                    )
-                    reply = response.text
-                    st.markdown(reply)
-                except Exception as e:
-                    reply = None
-                    st.error(f"Gemini API error: {e}")
-
-            if reply:
-                st.session_state.chat_messages.append({"role": "assistant", "content": reply})
 
 with st.expander("Raw data", icon=":material/table:"):
     st.dataframe(filtered, hide_index=True, use_container_width=True)
