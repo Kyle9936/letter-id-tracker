@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
+from fpdf import FPDF
 from streamlit_gsheets import GSheetsConnection
 
 st.set_page_config(
@@ -116,7 +117,41 @@ def progress_bar_html(val):
         f'</div>'
     )
 
-tab_scorecard, tab_individual, tab_cohort, tab_ranking = st.tabs(["Student Scorecard", "Individual Progress", "Cohort Progress", "Student Ranking"])
+LETTERS = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+def parse_known_letters(val):
+    if pd.isna(val) or str(val).strip() == "":
+        return set()
+    return {l.strip().upper() for l in str(val).split(",")}
+
+def letter_grid_html(title, known_set):
+    cells = ""
+    for letter in LETTERS:
+        if letter in known_set:
+            bg = "#66BB6A"
+            color = "#fff"
+        else:
+            bg = "#EF9A9A"
+            color = "#fff"
+        cells += (
+            f'<div style="display:inline-flex;align-items:center;justify-content:center;'
+            f'width:36px;height:36px;margin:2px;border-radius:4px;'
+            f'background:{bg};color:{color};font-weight:600;font-size:14px;">'
+            f'{letter}</div>'
+        )
+    count = len(known_set)
+    return (
+        f'<div style="margin-bottom:12px;">'
+        f'<div style="font-weight:600;font-size:14px;margin-bottom:4px;">{title} ({count}/26)</div>'
+        f'<div style="max-width:480px;">{cells}</div>'
+        f'</div>'
+    )
+
+HAS_LETTER_DETAIL = all(c in df.columns for c in ["Known Uppercase", "Known Lowercase", "Known Sounds"])
+
+tab_scorecard, tab_individual, tab_cohort, tab_ranking, tab_letters, tab_pdf = st.tabs(
+    ["Student Scorecard", "Individual Progress", "Cohort Progress", "Student Ranking", "Letter Detail", "Export PDF"]
+)
 
 with tab_scorecard:
     st.subheader(f"Student Scorecard - {most_recent_date}")
@@ -176,7 +211,7 @@ with tab_individual:
             )
 
             chart = bars + labels
-            st.altair_chart(chart, use_container_width=True)
+            st.altair_chart(chart, width="stretch")
 
             display_cols = ["Week", "Uppercase", "Lowercase", "Sound Total"] + [m for m in metrics]
             table_df = student_df[display_cols].sort_values("Week").reset_index(drop=True)
@@ -260,7 +295,7 @@ with tab_cohort:
         )
 
         cohort_chart = cohort_bars + cohort_labels
-        st.altair_chart(cohort_chart, use_container_width=True)
+        st.altair_chart(cohort_chart, width="stretch")
 
         cohort_table_df = cohort_df.copy()
         cohort_table_df["Week"] = cohort_table_df["Week"].dt.strftime("%b %d, %Y")
@@ -354,3 +389,115 @@ with tab_ranking:
             f'</table></div>'
         )
         st.markdown(ls_html, unsafe_allow_html=True)
+
+with tab_letters:
+    st.subheader(f"Letter Detail - {most_recent_date}")
+
+    if not HAS_LETTER_DETAIL:
+        st.info(
+            "Add columns 'Known Uppercase', 'Known Lowercase', and 'Known Sounds' to your Google Sheet "
+            "with comma-separated letters (e.g., A,B,C,D,E) to enable this view."
+        )
+    else:
+        selected_student_detail = st.selectbox("Select a student", students, key="letter_detail_student")
+        student_latest = latest[latest["Student Name"] == selected_student_detail]
+
+        if student_latest.empty:
+            st.warning("No data for this student.")
+        else:
+            row = student_latest.iloc[0]
+            known_upper = parse_known_letters(row.get("Known Uppercase", ""))
+            known_lower = parse_known_letters(row.get("Known Lowercase", ""))
+            known_sounds = parse_known_letters(row.get("Known Sounds", ""))
+
+            with st.container(border=True):
+                st.markdown(f"**{selected_student_detail}**")
+                st.markdown(
+                    letter_grid_html("Uppercase Letters", known_upper)
+                    + letter_grid_html("Lowercase Letters", known_lower)
+                    + letter_grid_html("Letter Sounds", known_sounds),
+                    unsafe_allow_html=True,
+                )
+
+with tab_pdf:
+    st.subheader("Export PDF Report")
+
+    pdf_scope = st.selectbox("Select student", ["All Students"] + students, key="pdf_student")
+
+    def generate_pdf(student_rows):
+        pdf = FPDF(orientation="P", unit="mm", format="A4")
+        pdf.set_auto_page_break(auto=True, margin=15)
+
+        for _, row in student_rows.iterrows():
+            pdf.add_page()
+            name = row["Student Name"]
+            date = row["Week"].strftime("%B %d, %Y")
+
+            # Header
+            pdf.set_font("Helvetica", "B", 18)
+            pdf.cell(0, 10, name, new_x="LMARGIN", new_y="NEXT")
+            pdf.set_font("Helvetica", "", 11)
+            pdf.cell(0, 6, f"Assessment Date: {date}", new_x="LMARGIN", new_y="NEXT")
+            pdf.ln(4)
+
+            # Scores table
+            pdf.set_font("Helvetica", "B", 12)
+            pdf.cell(0, 8, "Scores", new_x="LMARGIN", new_y="NEXT")
+            pdf.set_font("Helvetica", "B", 10)
+            col_w = 38
+            headers = ["Uppercase", "Lowercase", "Letter ID %", "Sound Total", "Sound %"]
+            for h in headers:
+                pdf.cell(col_w, 7, h, border=1)
+            pdf.ln()
+            pdf.set_font("Helvetica", "", 10)
+            values = [
+                f"{int(row['Uppercase'])}/26",
+                f"{int(row['Lowercase'])}/26",
+                f"{row['Total Letter ID %']:.1f}%",
+                f"{int(row['Sound Total'])}/26",
+                f"{row['Letter Sound %']:.1f}%",
+            ]
+            for v in values:
+                pdf.cell(col_w, 7, v, border=1)
+            pdf.ln(12)
+
+            # Letter detail grids (if available)
+            if HAS_LETTER_DETAIL:
+                known_upper = parse_known_letters(row.get("Known Uppercase", ""))
+                known_lower = parse_known_letters(row.get("Known Lowercase", ""))
+                known_sounds = parse_known_letters(row.get("Known Sounds", ""))
+
+                for label, known in [("Uppercase Letters", known_upper), ("Lowercase Letters", known_lower), ("Letter Sounds", known_sounds)]:
+                    pdf.set_font("Helvetica", "B", 12)
+                    pdf.cell(0, 8, f"{label} ({len(known)}/26)", new_x="LMARGIN", new_y="NEXT")
+                    pdf.set_font("Helvetica", "", 10)
+
+                    for i, letter in enumerate(LETTERS):
+                        if letter in known:
+                            pdf.set_fill_color(102, 187, 106)
+                            pdf.set_text_color(255, 255, 255)
+                        else:
+                            pdf.set_fill_color(239, 154, 154)
+                            pdf.set_text_color(255, 255, 255)
+                        pdf.cell(14, 14, letter, border=0, fill=True, align="C")
+                        if (i + 1) % 13 == 0:
+                            pdf.ln()
+                    pdf.set_text_color(0, 0, 0)
+                    pdf.ln(6)
+
+        return bytes(pdf.output())
+
+    if pdf_scope == "All Students":
+        pdf_data_rows = latest
+    else:
+        pdf_data_rows = latest[latest["Student Name"] == pdf_scope]
+
+    if st.button("Generate PDF"):
+        pdf_bytes = generate_pdf(pdf_data_rows)
+        file_label = pdf_scope.replace(" ", "_") if pdf_scope != "All Students" else "All_Students"
+        st.download_button(
+            "Download PDF",
+            data=pdf_bytes,
+            file_name=f"Letter_ID_Report_{file_label}.pdf",
+            mime="application/pdf",
+        )
