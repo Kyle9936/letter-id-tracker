@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import altair as alt
 from streamlit_gsheets import GSheetsConnection
+from openai import OpenAI
 
 st.set_page_config(
     page_title="Letter ID progress tracker",
@@ -48,6 +49,8 @@ with st.sidebar:
         selection_mode="multi",
         default=["Total Letter ID %", "Letter Sound %"],
     )
+    st.header("Ask Your Data", divider=True)
+    openai_api_key = st.text_input("OpenAI API Key", type="password", help="Enter your OpenAI API key to enable the chat feature.")
 
 if not selected_students:
     st.warning("Select at least one student.")
@@ -93,7 +96,7 @@ def progress_bar_html(val):
         f'</div>'
     )
 
-tab_scorecard, tab_individual, tab_cohort = st.tabs(["Student Scorecard", "Individual Progress", "Cohort Progress"])
+tab_scorecard, tab_individual, tab_cohort, tab_chat = st.tabs(["Student Scorecard", "Individual Progress", "Cohort Progress", "Ask Your Data"])
 
 with tab_scorecard:
     st.subheader(f"Student scorecard - {most_recent_date}")
@@ -249,6 +252,57 @@ with tab_cohort:
             f'</table></div>'
         )
         st.markdown(cohort_html, unsafe_allow_html=True)
+
+with tab_chat:
+    if not openai_api_key:
+        st.info("Enter your OpenAI API key in the sidebar to start asking questions about your data.", icon=":material/key:")
+    else:
+        if "chat_messages" not in st.session_state:
+            st.session_state.chat_messages = []
+
+        data_summary = filtered.to_csv(index=False)
+
+        system_prompt = (
+            "You are a helpful teaching assistant analyzing student letter identification progress data. "
+            "You have access to the following student data:\n\n"
+            f"{data_summary}\n\n"
+            "Columns explained:\n"
+            "- Student Name: the student's name\n"
+            "- Week: the date of the assessment\n"
+            "- Uppercase: number of uppercase letters identified (out of 26)\n"
+            "- Lowercase: number of lowercase letters identified (out of 26)\n"
+            "- Letter Sound: number of letter sounds identified (out of 26)\n"
+            "- Total Letter ID %: combined uppercase + lowercase as a percentage of 52\n"
+            "- Letter Sound %: letter sounds as a percentage of 26\n\n"
+            "Answer questions clearly and concisely. When discussing performance, reference the color thresholds: "
+            "green (80%+), yellow (65-79%), orange (40-64%), red (below 40%). "
+            "Provide actionable insights when possible."
+        )
+
+        for msg in st.session_state.chat_messages:
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
+
+        if prompt := st.chat_input("Ask a question about your student data..."):
+            st.session_state.chat_messages.append({"role": "user", "content": prompt})
+            with st.chat_message("user"):
+                st.markdown(prompt)
+
+            client = OpenAI(api_key=openai_api_key)
+            messages = [{"role": "system", "content": system_prompt}] + [
+                {"role": m["role"], "content": m["content"]}
+                for m in st.session_state.chat_messages
+            ]
+
+            with st.chat_message("assistant"):
+                response = client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=messages,
+                )
+                reply = response.choices[0].message.content
+                st.markdown(reply)
+
+            st.session_state.chat_messages.append({"role": "assistant", "content": reply})
 
 with st.expander("Raw data", icon=":material/table:"):
     st.dataframe(filtered, hide_index=True, use_container_width=True)
