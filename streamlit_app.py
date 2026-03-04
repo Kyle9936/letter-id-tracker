@@ -116,7 +116,7 @@ def progress_bar_html(val):
         f'</div>'
     )
 
-tab_scorecard, tab_individual, tab_cohort = st.tabs(["Student Scorecard", "Individual Progress", "Cohort Progress"])
+tab_scorecard, tab_individual, tab_cohort, tab_ranking = st.tabs(["Student Scorecard", "Individual Progress", "Cohort Progress", "Student Ranking"])
 
 with tab_scorecard:
     st.subheader(f"Student Scorecard - {most_recent_date}")
@@ -295,3 +295,62 @@ with tab_cohort:
             f'</table></div>'
         )
         st.markdown(cohort_html, unsafe_allow_html=True)
+
+with tab_ranking:
+    st.subheader(f"Student Ranking - {most_recent_date}")
+
+    rank_cols = st.columns(2)
+
+    with rank_cols[0]:
+        st.markdown("**Total Letter ID %**")
+        tid_ranked = latest[["Student Name", "Total Letter ID %"]].sort_values("Total Letter ID %", ascending=False).reset_index(drop=True)
+        tid_ranked.index += 1
+        tid_header = (
+            '<th style="text-align:left;padding:8px 12px;border-bottom:2px solid #ddd;font-size:13px;">Rank</th>'
+            '<th style="text-align:left;padding:8px 12px;border-bottom:2px solid #ddd;font-size:13px;">Student</th>'
+            '<th style="text-align:left;padding:8px 12px;border-bottom:2px solid #ddd;font-size:13px;">Total Letter ID %</th>'
+        )
+        tid_body = ""
+        for rank, (_, r) in enumerate(tid_ranked.iterrows(), start=1):
+            tid_body += (
+                f'<tr>'
+                f'<td style="padding:6px 12px;font-size:13px;font-weight:600;">{rank}</td>'
+                f'<td style="padding:6px 12px;font-size:13px;">{r["Student Name"]}</td>'
+                f'<td style="padding:6px 12px;min-width:140px;">{progress_bar_html(r["Total Letter ID %"])}</td>'
+                f'</tr>'
+            )
+        tid_html = (
+            f'<div style="overflow-x:auto;">'
+            f'<table style="width:100%;border-collapse:collapse;">'
+            f'<thead><tr>{tid_header}</tr></thead>'
+            f'<tbody>{tid_body}</tbody>'
+            f'</table></div>'
+        )
+        st.markdown(tid_html, unsafe_allow_html=True)
+
+    with rank_cols[1]:
+        st.markdown("**Letter Sound %**")
+        ls_ranked = latest[["Student Name", "Letter Sound %"]].sort_values("Letter Sound %", ascending=False).reset_index(drop=True)
+        ls_ranked.index += 1
+        ls_header = (
+            '<th style="text-align:left;padding:8px 12px;border-bottom:2px solid #ddd;font-size:13px;">Rank</th>'
+            '<th style="text-align:left;padding:8px 12px;border-bottom:2px solid #ddd;font-size:13px;">Student</th>'
+            '<th style="text-align:left;padding:8px 12px;border-bottom:2px solid #ddd;font-size:13px;">Letter Sound %</th>'
+        )
+        ls_body = ""
+        for rank, (_, r) in enumerate(ls_ranked.iterrows(), start=1):
+            ls_body += (
+                f'<tr>'
+                f'<td style="padding:6px 12px;font-size:13px;font-weight:600;">{rank}</td>'
+                f'<td style="padding:6px 12px;font-size:13px;">{r["Student Name"]}</td>'
+                f'<td style="padding:6px 12px;min-width:140px;">{progress_bar_html(r["Letter Sound %"])}</td>'
+                f'</tr>'
+            )
+        ls_html = (
+            f'<div style="overflow-x:auto;">'
+            f'<table style="width:100%;border-collapse:collapse;">'
+            f'<thead><tr>{ls_header}</tr></thead>'
+            f'<tbody>{ls_body}</tbody>'
+            f'</table></div>'
+        )
+        st.markdown(ls_html, unsafe_allow_html=True)
