@@ -314,17 +314,22 @@ with tab_chat:
             ]
 
             with st.chat_message("assistant"):
-                response = client.models.generate_content(
-                    model="gemini-2.0-flash",
-                    contents=contents,
-                    config=types.GenerateContentConfig(
-                        system_instruction=system_prompt,
-                    ),
-                )
-                reply = response.text
-                st.markdown(reply)
+                try:
+                    response = client.models.generate_content(
+                        model="gemini-2.0-flash",
+                        contents=contents,
+                        config=types.GenerateContentConfig(
+                            system_instruction=system_prompt,
+                        ),
+                    )
+                    reply = response.text
+                    st.markdown(reply)
+                except Exception as e:
+                    reply = None
+                    st.error(f"Gemini API error: {e}")
 
-            st.session_state.chat_messages.append({"role": "assistant", "content": reply})
+            if reply:
+                st.session_state.chat_messages.append({"role": "assistant", "content": reply})
 
 with st.expander("Raw data", icon=":material/table:"):
     st.dataframe(filtered, hide_index=True, use_container_width=True)
