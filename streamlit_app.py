@@ -9,6 +9,7 @@ from google.genai import types
 st.set_page_config(
     page_title="Letter Identification Progress Tracker",
     layout="wide",
+    initial_sidebar_state="expanded",
 )
 
 st.title("Letter Identification Progress Tracker")
