@@ -6,26 +6,12 @@ from streamlit_gsheets import GSheetsConnection
 from google import genai
 from google.genai import types
 
-SCHOOL_LOGO_URL = "https://resources.finalsite.net/images/f_auto,q_auto/v1739197457/lowellpublicsd/s1zvyqa9iu6q6erfrbj4/DrGertrudeBaileyElementarySchoolfavicon.png"
-SCHOOL_NAME = "Dr. Gertrude Bailey Elementary School"
-SCHOOL_COLOR = "#2e67b1"
-
 st.set_page_config(
-    page_title=f"Letter ID Tracker - {SCHOOL_NAME}",
-    page_icon=SCHOOL_LOGO_URL,
+    page_title="Letter Identification Progress Tracker",
     layout="wide",
 )
 
-# School-branded header
-header_cols = st.columns([0.06, 0.94])
-with header_cols[0]:
-    st.image(SCHOOL_LOGO_URL, width=60)
-with header_cols[1]:
-    st.markdown(
-        f'<h1 style="margin:0;padding:0;line-height:1.2;">Letter Identification Progress Tracker</h1>'
-        f'<p style="margin:0;padding:0;color:{SCHOOL_COLOR};font-size:15px;font-weight:500;">{SCHOOL_NAME}</p>',
-        unsafe_allow_html=True,
-    )
+st.title("Letter Identification Progress Tracker")
 
 st.markdown(
     """<style>
@@ -79,12 +65,6 @@ df["Letter Sound %"] = (df["Letter Sound"] / 26 * 100).round(1)
 students = sorted(df["Student Name"].unique().tolist())
 
 with st.sidebar:
-    st.image(SCHOOL_LOGO_URL, width=50)
-    st.markdown(
-        f'<p style="font-size:13px;font-weight:600;color:{SCHOOL_COLOR};margin:0 0 4px 0;">{SCHOOL_NAME}</p>'
-        f'<p style="font-size:11px;color:#888;margin:0 0 12px 0;">175 Campbell Drive, Lowell, MA 01851</p>',
-        unsafe_allow_html=True,
-    )
     st.header("Filters", divider=True)
     selected_students = st.multiselect("Students", students, default=students)
     metrics = st.pills(
