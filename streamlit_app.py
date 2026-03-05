@@ -154,7 +154,7 @@ def letter_grid_html(title, known_set, lowercase=False):
 HAS_LETTER_DETAIL = all(c in df.columns for c in ["Known Uppercase", "Known Lowercase", "Known Sounds"])
 
 tab_scorecard, tab_individual, tab_cohort, tab_ranking, tab_letters, tab_pdf, tab_chat = st.tabs(
-    ["Student Scorecard", "Individual Progress", "Cohort Progress", "Student Ranking", "Letter Detail", "Export PDF", "Ask Your Data"]
+    ["Student Scorecard", "Individual Progress", "Cohort Progress", "Student Ranking", "Letter Detail", "Export PDF", "Data Assistant"]
 )
 
 with tab_scorecard:
