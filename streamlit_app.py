@@ -510,7 +510,6 @@ with tab_pdf:
 with tab_chat:
     if not gemini_api_key:
         st.info("Add your Gemini API key to Streamlit secrets (GEMINI_API_KEY) to start asking questions about your data.", icon=":material/key:")
-        st.caption(f"Debug: available secret keys = {list(st.secrets.keys())}")
     else:
         if "chat_messages" not in st.session_state:
             st.session_state.chat_messages = []
