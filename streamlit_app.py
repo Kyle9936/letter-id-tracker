@@ -60,6 +60,12 @@ df["Week"] = pd.to_datetime(df["Week"])
 df = df.sort_values(["Student Name", "Week"])
 df["Week Label"] = df["Week"].dt.strftime("%b %d, %Y")
 
+with st.expander("DEBUG: Data check (remove later)"):
+    st.write("Week dtype:", str(df["Week"].dtype))
+    st.write("First 5 Week values:", df["Week"].head().tolist())
+    st.write("Sorted unique weeks:", sorted(df["Week"].unique()).tolist() if hasattr(df["Week"].unique(), 'tolist') else str(sorted(df["Week"].unique())))
+    st.dataframe(df[["Student Name", "Week", "Week Label"]].head(15))
+
 df["Total Letter ID %"] = ((df["Uppercase"] + df["Lowercase"]) / 52 * 100).round(1)
 df["Letter Sound %"] = (df["Letter Sound"] / 26 * 100).round(1)
 
