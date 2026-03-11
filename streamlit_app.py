@@ -60,12 +60,6 @@ df["Week"] = pd.to_datetime(df["Week"])
 df = df.sort_values(["Student Name", "Week"])
 df["Week Label"] = df["Week"].dt.strftime("%b %d, %Y")
 
-with st.expander("DEBUG: Data check (remove later)"):
-    st.write("Week dtype:", str(df["Week"].dtype))
-    st.write("First 5 Week values:", df["Week"].head().tolist())
-    st.write("Sorted unique weeks:", sorted(df["Week"].unique()).tolist() if hasattr(df["Week"].unique(), 'tolist') else str(sorted(df["Week"].unique())))
-    st.dataframe(df[["Student Name", "Week", "Week Label"]].head(15))
-
 df["Total Letter ID %"] = ((df["Uppercase"] + df["Lowercase"]) / 52 * 100).round(1)
 df["Letter Sound %"] = (df["Letter Sound"] / 26 * 100).round(1)
 
@@ -183,7 +177,8 @@ with tab_scorecard:
 
 with tab_individual:
     for student in selected_students:
-        student_df = filtered[filtered["Student Name"] == student]
+        student_df = filtered[filtered["Student Name"] == student].sort_values("Week")
+        week_order = student_df["Week Label"].drop_duplicates().tolist()
         student_melted = student_df.melt(
             id_vars=["Student Name", "Week", "Week Label"],
             value_vars=[m for m in metrics],
@@ -201,7 +196,7 @@ with tab_individual:
                 alt.Chart(student_melted)
                 .mark_bar()
                 .encode(
-                    x=alt.X("Week Label:O", title="Week", sort=alt.SortField("Week"), axis=alt.Axis(labelAngle=0)),
+                    x=alt.X("Week Label:O", title="Week", sort=week_order, axis=alt.Axis(labelAngle=0)),
                     y=alt.Y("Score (%):Q", title="Score (%)", scale=alt.Scale(domain=[0, 100])),
                     color=alt.Color("Metric:N", sort=metric_order),
                     xOffset=alt.XOffset("Metric:N", sort=metric_order),
@@ -213,7 +208,7 @@ with tab_individual:
                 alt.Chart(student_melted)
                 .mark_text(dy=-8, fontSize=11)
                 .encode(
-                    x=alt.X("Week Label:O", sort=alt.SortField("Week")),
+                    x=alt.X("Week Label:O", sort=week_order),
                     y=alt.Y("Score (%):Q"),
                     text="Label:N",
                     xOffset=alt.XOffset("Metric:N", sort=metric_order),
@@ -267,6 +262,7 @@ with tab_cohort:
         ["Sound Total", "Total Letter ID %", "Letter Sound %"]
     ].mean().round(1)
     cohort_df = cohort_df.sort_values("Week")
+    cohort_week_order = cohort_df["Week Label"].drop_duplicates().tolist()
 
     cohort_melted = cohort_df.melt(
         id_vars=["Week", "Week Label"],
@@ -285,7 +281,7 @@ with tab_cohort:
             alt.Chart(cohort_melted)
             .mark_bar()
             .encode(
-                x=alt.X("Week Label:O", title="Week", sort=alt.SortField("Week"), axis=alt.Axis(labelAngle=0)),
+                x=alt.X("Week Label:O", title="Week", sort=cohort_week_order, axis=alt.Axis(labelAngle=0)),
                 y=alt.Y("Score (%):Q", title="Avg Score (%)", scale=alt.Scale(domain=[0, 100])),
                 color=alt.Color("Metric:N", sort=cohort_metric_order),
                 xOffset=alt.XOffset("Metric:N", sort=cohort_metric_order),
@@ -297,7 +293,7 @@ with tab_cohort:
             alt.Chart(cohort_melted)
             .mark_text(dy=-8, fontSize=11)
             .encode(
-                x=alt.X("Week Label:O", sort=alt.SortField("Week")),
+                x=alt.X("Week Label:O", sort=cohort_week_order),
                 y=alt.Y("Score (%):Q"),
                 text="Label:N",
                 xOffset=alt.XOffset("Metric:N", sort=cohort_metric_order),
