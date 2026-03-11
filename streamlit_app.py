@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
+import altair as alt
 from fpdf import FPDF
 from streamlit_gsheets import GSheetsConnection
 from google import genai
@@ -177,37 +177,45 @@ with tab_scorecard:
 
 with tab_individual:
     for student in selected_students:
-        student_df = filtered[filtered["Student Name"] == student].sort_values("Week")
+        student_df = filtered[filtered["Student Name"] == student]
         student_melted = student_df.melt(
             id_vars=["Student Name", "Week", "Week Label"],
             value_vars=[m for m in metrics],
             var_name="Metric",
             value_name="Score (%)",
         )
-        week_label_order = student_df["Week Label"].tolist()
+        student_melted["Label"] = student_melted["Score (%)"].round(0).astype(int).astype(str) + "%"
+
+        metric_order = ["Total Letter ID %", "Letter Sound %"]
 
         with st.container(border=True):
             st.markdown(f"**{student}**")
 
-            fig = px.bar(
-                student_melted,
-                x="Week Label",
-                y="Score (%)",
-                color="Metric",
-                barmode="group",
-                text_auto=".0f",
-                category_orders={"Week Label": week_label_order, "Metric": ["Total Letter ID %", "Letter Sound %"]},
+            bars = (
+                alt.Chart(student_melted)
+                .mark_bar()
+                .encode(
+                    x=alt.X("Week Label:O", title="Week", sort=alt.SortField("Week"), axis=alt.Axis(labelAngle=0)),
+                    y=alt.Y("Score (%):Q", title="Score (%)", scale=alt.Scale(domain=[0, 100])),
+                    color=alt.Color("Metric:N", sort=metric_order),
+                    xOffset=alt.XOffset("Metric:N", sort=metric_order),
+                    tooltip=["Week Label", "Metric", "Score (%)"],
+                )
             )
-            fig.update_layout(
-                xaxis_title="Week",
-                yaxis_title="Score (%)",
-                yaxis_range=[0, 100],
-                xaxis_tickangle=0,
-                legend_title_text="",
-                margin=dict(t=20, b=40),
+
+            labels = (
+                alt.Chart(student_melted)
+                .mark_text(dy=-8, fontSize=11)
+                .encode(
+                    x=alt.X("Week Label:O", sort=alt.SortField("Week")),
+                    y=alt.Y("Score (%):Q"),
+                    text="Label:N",
+                    xOffset=alt.XOffset("Metric:N", sort=metric_order),
+                )
             )
-            fig.update_traces(textposition="outside", texttemplate="%{y:.0f}%")
-            st.plotly_chart(fig, use_container_width=True)
+
+            chart = bars + labels
+            st.altair_chart(chart, width="stretch")
 
             display_cols = ["Week", "Uppercase", "Lowercase", "Sound Total"] + [m for m in metrics]
             table_df = student_df[display_cols].sort_values("Week").reset_index(drop=True)
@@ -260,30 +268,38 @@ with tab_cohort:
         var_name="Metric",
         value_name="Score (%)",
     )
-    week_label_order = cohort_df["Week Label"].tolist()
+    cohort_melted["Label"] = cohort_melted["Score (%)"].round(0).astype(int).astype(str) + "%"
 
     with st.container(border=True):
         st.markdown(f"**All selected students** ({len(selected_students)} students)")
 
-        fig = px.bar(
-            cohort_melted,
-            x="Week Label",
-            y="Score (%)",
-            color="Metric",
-            barmode="group",
-            text_auto=".0f",
-            category_orders={"Week Label": week_label_order, "Metric": ["Total Letter ID %", "Letter Sound %"]},
+        cohort_metric_order = ["Total Letter ID %", "Letter Sound %"]
+
+        cohort_bars = (
+            alt.Chart(cohort_melted)
+            .mark_bar()
+            .encode(
+                x=alt.X("Week Label:O", title="Week", sort=alt.SortField("Week"), axis=alt.Axis(labelAngle=0)),
+                y=alt.Y("Score (%):Q", title="Avg Score (%)", scale=alt.Scale(domain=[0, 100])),
+                color=alt.Color("Metric:N", sort=cohort_metric_order),
+                xOffset=alt.XOffset("Metric:N", sort=cohort_metric_order),
+                tooltip=["Week Label", "Metric", "Score (%)"],
+            )
         )
-        fig.update_layout(
-            xaxis_title="Week",
-            yaxis_title="Avg Score (%)",
-            yaxis_range=[0, 100],
-            xaxis_tickangle=0,
-            legend_title_text="",
-            margin=dict(t=20, b=40),
+
+        cohort_labels = (
+            alt.Chart(cohort_melted)
+            .mark_text(dy=-8, fontSize=11)
+            .encode(
+                x=alt.X("Week Label:O", sort=alt.SortField("Week")),
+                y=alt.Y("Score (%):Q"),
+                text="Label:N",
+                xOffset=alt.XOffset("Metric:N", sort=cohort_metric_order),
+            )
         )
-        fig.update_traces(textposition="outside", texttemplate="%{y:.0f}%")
-        st.plotly_chart(fig, use_container_width=True)
+
+        cohort_chart = cohort_bars + cohort_labels
+        st.altair_chart(cohort_chart, width="stretch")
 
         cohort_table_df = cohort_df.copy()
         cohort_table_df["Week"] = cohort_table_df["Week"].dt.strftime("%b %d, %Y")
