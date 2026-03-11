@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
+import matplotlib.pyplot as plt
+import io
 from fpdf import FPDF
 from streamlit_gsheets import GSheetsConnection
 from google import genai
@@ -430,7 +432,7 @@ with tab_pdf:
 
     pdf_scope = st.selectbox("Select student", ["All Students"] + students, key="pdf_student")
 
-    def generate_pdf(student_rows):
+    def generate_pdf(student_rows, all_data):
         pdf = FPDF(orientation="P", unit="mm", format="A4")
         pdf.set_auto_page_break(auto=True, margin=15)
 
@@ -467,6 +469,45 @@ with tab_pdf:
                 pdf.cell(col_w, 7, v, border=1)
             pdf.ln(12)
 
+            # Progress bar chart
+            student_history = all_data[all_data["Student Name"] == name].sort_values("Week")
+            if len(student_history) > 1:
+                pdf.set_font("Helvetica", "B", 12)
+                pdf.cell(0, 8, "Progress Over Time", new_x="LMARGIN", new_y="NEXT")
+                pdf.ln(2)
+
+                week_labels = student_history["Week Label"].tolist()
+                tid_vals = student_history["Total Letter ID %"].tolist()
+                ls_vals = student_history["Letter Sound %"].tolist()
+
+                fig, ax = plt.subplots(figsize=(7, 3))
+                x = range(len(week_labels))
+                bar_width = 0.35
+                bars1 = ax.bar([i - bar_width / 2 for i in x], tid_vals, bar_width, label="Total Letter ID %", color="#5B9BD5")
+                bars2 = ax.bar([i + bar_width / 2 for i in x], ls_vals, bar_width, label="Letter Sound %", color="#ED7D31")
+
+                for bar in bars1:
+                    ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1, f"{bar.get_height():.0f}%", ha="center", va="bottom", fontsize=7)
+                for bar in bars2:
+                    ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1, f"{bar.get_height():.0f}%", ha="center", va="bottom", fontsize=7)
+
+                ax.set_xticks(list(x))
+                ax.set_xticklabels(week_labels, fontsize=8)
+                ax.set_ylim(0, 110)
+                ax.set_ylabel("Score (%)", fontsize=9)
+                ax.legend(fontsize=8, loc="upper left")
+                ax.spines["top"].set_visible(False)
+                ax.spines["right"].set_visible(False)
+                fig.tight_layout()
+
+                buf = io.BytesIO()
+                fig.savefig(buf, format="png", dpi=150)
+                plt.close(fig)
+                buf.seek(0)
+
+                pdf.image(buf, x=pdf.l_margin, w=170)
+                pdf.ln(4)
+
             # Letter detail grids (if available)
             if HAS_LETTER_DETAIL:
                 known_upper = parse_known_letters(row.get("Known Uppercase", ""))
@@ -500,7 +541,7 @@ with tab_pdf:
         pdf_data_rows = latest[latest["Student Name"] == pdf_scope]
 
     if st.button("Generate PDF"):
-        pdf_bytes = generate_pdf(pdf_data_rows)
+        pdf_bytes = generate_pdf(pdf_data_rows, filtered)
         file_label = pdf_scope.replace(" ", "_") if pdf_scope != "All Students" else "All_Students"
         st.download_button(
             "Download PDF",
