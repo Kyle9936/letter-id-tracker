@@ -124,10 +124,12 @@ def progress_bar_html(val):
 
 LETTERS = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
-def parse_known_letters(val):
+def parse_known_from_unknown(val):
+    all_letters = set(LETTERS)
     if pd.isna(val) or str(val).strip() == "":
-        return set()
-    return {l.strip().upper() for l in str(val).split(",")}
+        return all_letters
+    unknown = {l.strip().upper() for l in str(val).split(",")}
+    return all_letters - unknown
 
 def letter_grid_html(title, known_set, lowercase=False):
     cells = ""
@@ -153,7 +155,7 @@ def letter_grid_html(title, known_set, lowercase=False):
         f'</div>'
     )
 
-HAS_LETTER_DETAIL = all(c in df.columns for c in ["Known Uppercase", "Known Lowercase", "Known Sounds"])
+HAS_LETTER_DETAIL = all(c in df.columns for c in ["Unknown Uppercase", "Unknown Lowercase", "Unknown Sounds"])
 
 tab_scorecard, tab_individual, tab_cohort, tab_ranking, tab_letters, tab_pdf, tab_chat = st.tabs(
     ["Student Scorecard", "Individual Progress", "Cohort Progress", "Student Ranking", "Letter Detail", "Export PDF", "Data Assistant"]
@@ -403,8 +405,8 @@ with tab_letters:
 
     if not HAS_LETTER_DETAIL:
         st.info(
-            "Add columns 'Known Uppercase', 'Known Lowercase', and 'Known Sounds' to your Google Sheet "
-            "with comma-separated letters (e.g., A,B,C,D,E) to enable this view."
+            "Add columns 'Unknown Uppercase', 'Unknown Lowercase', and 'Unknown Sounds' to your Google Sheet "
+            "with comma-separated letters the student does NOT know (e.g., Q,X,Z) to enable this view."
         )
     else:
         selected_student_detail = st.selectbox("Select a student", students, key="letter_detail_student")
@@ -414,9 +416,9 @@ with tab_letters:
             st.warning("No data for this student.")
         else:
             row = student_latest.iloc[0]
-            known_upper = parse_known_letters(row.get("Known Uppercase", ""))
-            known_lower = parse_known_letters(row.get("Known Lowercase", ""))
-            known_sounds = parse_known_letters(row.get("Known Sounds", ""))
+            known_upper = parse_known_from_unknown(row.get("Unknown Uppercase", ""))
+            known_lower = parse_known_from_unknown(row.get("Unknown Lowercase", ""))
+            known_sounds = parse_known_from_unknown(row.get("Unknown Sounds", ""))
 
             with st.container(border=True):
                 st.markdown(f"**{selected_student_detail}**")
@@ -510,9 +512,9 @@ with tab_pdf:
 
             # Letter detail grids (if available)
             if HAS_LETTER_DETAIL:
-                known_upper = parse_known_letters(row.get("Known Uppercase", ""))
-                known_lower = parse_known_letters(row.get("Known Lowercase", ""))
-                known_sounds = parse_known_letters(row.get("Known Sounds", ""))
+                known_upper = parse_known_from_unknown(row.get("Unknown Uppercase", ""))
+                known_lower = parse_known_from_unknown(row.get("Unknown Lowercase", ""))
+                known_sounds = parse_known_from_unknown(row.get("Unknown Sounds", ""))
 
                 for label, known, is_lower in [("Uppercase Letters", known_upper, False), ("Lowercase Letters", known_lower, True), ("Letter Sounds", known_sounds, False)]:
                     pdf.set_font("Helvetica", "B", 12)
@@ -572,9 +574,9 @@ with tab_chat:
             "- Letter Sound: number of letter sounds identified (out of 26)\n"
             "- Total Letter ID %: combined uppercase + lowercase as a percentage of 52\n"
             "- Letter Sound %: letter sounds as a percentage of 26\n"
-            "- Known Uppercase: comma-separated list of specific uppercase letters the student knows\n"
-            "- Known Lowercase: comma-separated list of specific lowercase letters the student knows\n"
-            "- Known Sounds: comma-separated list of specific letter sounds the student knows\n\n"
+            "- Unknown Uppercase: comma-separated list of specific uppercase letters the student does NOT know\n"
+            "- Unknown Lowercase: comma-separated list of specific lowercase letters the student does NOT know\n"
+            "- Unknown Sounds: comma-separated list of specific letter sounds the student does NOT know\n\n"
             "Answer questions clearly and concisely. When discussing performance, reference the color thresholds: "
             "green (80%+), yellow (65-79%), orange (40-64%), red (below 40%). "
             "Provide actionable insights when possible."
