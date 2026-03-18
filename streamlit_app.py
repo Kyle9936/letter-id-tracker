@@ -185,8 +185,8 @@ def progress_bar_html(val):
 
 LETTERS = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
-tab_scorecard, tab_individual, tab_cohort, tab_ranking, tab_letters, tab_pdf = st.tabs(
-    ["Student Scorecard", "Individual Progress", "Cohort Progress", "Student Ranking", "Letter Detail", "Export PDF"]
+tab_scorecard, tab_individual, tab_cohort, tab_ranking, tab_letters, tab_assess, tab_pdf = st.tabs(
+    ["Student Scorecard", "Individual Progress", "Cohort Progress", "Student Ranking", "Letter Detail", "Live Assessment", "Export PDF"]
 )
 
 with tab_scorecard:
@@ -576,6 +576,260 @@ with tab_letters:
 
             st.cache_data.clear()
             st.success(f"Assessment saved for {selected_student_detail} ({today}).")
+            st.rerun()
+
+with tab_assess:
+    import random
+
+    st.subheader("Live Assessment")
+
+    PHASES = ["Uppercase", "Lowercase", "Sounds"]
+
+    # Session state keys for the assessment
+    if "assess_active" not in st.session_state:
+        st.session_state.assess_active = False
+    if "assess_done" not in st.session_state:
+        st.session_state.assess_done = False
+    if "assess_results" not in st.session_state:
+        st.session_state.assess_results = {}
+
+    if not st.session_state.assess_active and not st.session_state.assess_done:
+        # --- Setup screen ---
+        st.caption("Present letters one at a time and record whether the student identifies each one. The assessment covers all three pillars: Uppercase \u2192 Lowercase \u2192 Sounds.")
+
+        assess_student = st.selectbox("Select a student", students, key="assess_student")
+        assess_order = st.radio("Letter Order", ["Sequential (A-Z)", "Random"], key="assess_order", horizontal=True)
+
+        if st.button("Start Assessment", type="primary", icon=":material/play_arrow:", key="start_assess"):
+            orders = {}
+            for phase in PHASES:
+                order = list(LETTERS)
+                if assess_order == "Random":
+                    random.shuffle(order)
+                orders[phase] = order
+            st.session_state.assess_active = True
+            st.session_state.assess_done = False
+            st.session_state.assess_student_name = assess_student
+            st.session_state.assess_phase = 0
+            st.session_state.assess_letter_orders = orders
+            st.session_state.assess_index = 0
+            st.session_state.assess_results = {"Uppercase": {}, "Lowercase": {}, "Sounds": {}}
+            st.rerun()
+
+    elif st.session_state.assess_active and not st.session_state.assess_done:
+        # --- In-progress assessment ---
+        student_name = st.session_state.assess_student_name
+        phase_idx = st.session_state.assess_phase
+        phase = PHASES[phase_idx]
+        order = st.session_state.assess_letter_orders[phase]
+        idx = st.session_state.assess_index
+
+        overall_progress = phase_idx * 26 + idx
+        st.caption(f"Assessing <b>{student_name}</b>", unsafe_allow_html=True)
+
+        # Phase stepper
+        phase_labels = ["Uppercase", "Lowercase", "Sounds"]
+        phase_icons = ["ABC", "abc", "🔊"]
+        stepper_cells = ""
+        for i, (label, icon) in enumerate(zip(phase_labels, phase_icons)):
+            if i < phase_idx:
+                # Completed
+                bg = "#09AB3B"; color = "white"; border = "none"; badge = "✓ "
+            elif i == phase_idx:
+                # Active
+                bg = "#1E88E5"; color = "white"; border = "none"; badge = ""
+            else:
+                # Upcoming
+                bg = "#E0E0E0"; color = "#999"; border = "none"; badge = ""
+            stepper_cells += (
+                f'<div style="flex:1;text-align:center;padding:10px 8px;margin:0 4px;'
+                f'border-radius:8px;background:{bg};color:{color};border:{border};'
+                f'font-weight:{"700" if i == phase_idx else "500"};font-size:15px;">'
+                f'{badge}{icon} {label}</div>'
+            )
+        st.markdown(
+            f'<div style="display:flex;margin:8px 0 12px 0;">{stepper_cells}</div>',
+            unsafe_allow_html=True,
+        )
+
+        st.progress(overall_progress / 78, text=f"Letter {idx + 1} of 26")
+
+        current_letter = order[idx]
+        if phase == "Lowercase":
+            display_letter = current_letter.lower()
+        else:
+            display_letter = current_letter
+
+        # Large letter display
+        st.markdown(
+            f'<div style="text-align:center;padding:30px 0;">'
+            f'<span style="font-size:180px;font-weight:700;line-height:1;">{display_letter}</span>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+        def advance_assessment(letter, identified):
+            st.session_state.assess_results[phase][letter] = identified
+            if idx + 1 < 26:
+                st.session_state.assess_index = idx + 1
+            elif phase_idx + 1 < 3:
+                st.session_state.assess_phase = phase_idx + 1
+                st.session_state.assess_index = 0
+            else:
+                st.session_state.assess_active = False
+                st.session_state.assess_done = True
+
+        # Known / Not Identified buttons
+        btn_cols = st.columns([1, 1, 1, 1, 1])
+        with btn_cols[1]:
+            if st.button("Not Identified", key=f"assess_no_{phase_idx}_{idx}", use_container_width=True, icon=":material/close:"):
+                advance_assessment(current_letter, False)
+                st.rerun()
+        with btn_cols[3]:
+            if st.button("Identified", key=f"assess_yes_{phase_idx}_{idx}", type="primary", use_container_width=True, icon=":material/check:"):
+                advance_assessment(current_letter, True)
+                st.rerun()
+
+        # Style the buttons red/green
+        st.markdown(
+            f"""<style>
+            .st-key-assess_no_{phase_idx}_{idx} button {{ background-color: #EF9A9A !important; color: white !important; border: none !important; }}
+            .st-key-assess_yes_{phase_idx}_{idx} button {{ background-color: #09AB3B !important; color: white !important; border: none !important; }}
+            </style>""",
+            unsafe_allow_html=True,
+        )
+
+        st.divider()
+        if st.button("Cancel Assessment", key="cancel_assess"):
+            st.session_state.assess_active = False
+            st.session_state.assess_done = False
+            st.session_state.assess_results = {}
+            st.rerun()
+
+    elif st.session_state.assess_done:
+        # --- Results screen ---
+        student_name = st.session_state.assess_student_name
+        results = st.session_state.assess_results
+
+        upper_identified = [l for l, v in results["Uppercase"].items() if v]
+        lower_identified = [l for l, v in results["Lowercase"].items() if v]
+        sounds_identified = [l for l, v in results["Sounds"].items() if v]
+        upper_score = len(upper_identified)
+        lower_score = len(lower_identified)
+        sounds_score = len(sounds_identified)
+        tid_pct = round((upper_score + lower_score) / 52 * 100, 1)
+        ls_pct = round(sounds_score / 26 * 100, 1)
+
+        st.caption(f"Assessment complete for <b>{student_name}</b>", unsafe_allow_html=True)
+
+        score_cols = st.columns(5)
+        score_cols[0].metric("Uppercase ID", f"{upper_score}/26")
+        score_cols[1].metric("Lowercase ID", f"{lower_score}/26")
+        score_cols[2].metric("Total Letter ID", f"{tid_pct:.0f}%")
+        score_cols[3].metric("Sound Total", f"{sounds_score}/26")
+        score_cols[4].metric("Letter Sound", f"{ls_pct:.0f}%")
+
+        # Results grids for each pillar
+        for pillar_label, pillar_key, show_lower in [
+            ("Uppercase Letters", "Uppercase", False),
+            ("Lowercase Letters", "Lowercase", True),
+            ("Letter Sounds", "Sounds", False),
+        ]:
+            pillar_results = results[pillar_key]
+            pillar_identified = sum(1 for v in pillar_results.values() if v)
+            st.markdown(f"<b>{pillar_label} ({pillar_identified}/26)</b>", unsafe_allow_html=True)
+            grid_cells = ""
+            for letter in LETTERS:
+                was_identified = pillar_results.get(letter, False)
+                bg = "#09AB3B" if was_identified else "#EF9A9A"
+                display = letter.lower() if show_lower else letter
+                grid_cells += (
+                    f'<div style="display:inline-flex;align-items:center;justify-content:center;'
+                    f'width:42px;height:42px;margin:3px;border-radius:6px;'
+                    f'background:{bg};color:white;font-weight:700;font-size:16px;">'
+                    f'{display}</div>'
+                )
+            st.markdown(
+                f'<div style="max-width:600px;margin:12px 0;">{grid_cells}</div>',
+                unsafe_allow_html=True,
+            )
+
+        st.divider()
+        btn_cols = st.columns([1, 1, 3])
+        with btn_cols[0]:
+            save_clicked = st.button("Save Results", type="primary", icon=":material/save:", key="save_assess")
+        with btn_cols[1]:
+            discard_clicked = st.button("Discard", key="discard_assess")
+
+        if save_clicked:
+            from datetime import date
+
+            # Build known sets from all three pillars
+            known_upper = {l for l, v in results["Uppercase"].items() if v}
+            known_lower = {l for l, v in results["Lowercase"].items() if v}
+            known_sounds = {l for l, v in results["Sounds"].items() if v}
+
+            current_toggles = {
+                "Uppercase": known_upper,
+                "Lowercase": known_lower,
+                "Sounds": known_sounds,
+            }
+
+            # Sync session state for Letter Detail tab
+            existing_key = f"toggles_{student_name}"
+            st.session_state[existing_key] = current_toggles
+
+            # Compute unknown letters for storage
+            unknown_upper = sorted(set(LETTERS) - known_upper)
+            unknown_lower = sorted(set(LETTERS) - known_lower)
+            unknown_sounds = sorted(set(LETTERS) - known_sounds)
+
+            # 1) Update Letter State worksheet
+            existing_names = letter_state_df["Student Name"].tolist() if not letter_state_df.empty else []
+            if student_name in existing_names:
+                updated_state = letter_state_df.copy()
+                mask = updated_state["Student Name"] == student_name
+                updated_state.loc[mask, "Uppercase"] = ",".join(unknown_upper)
+                updated_state.loc[mask, "Lowercase"] = ",".join(unknown_lower)
+                updated_state.loc[mask, "Sounds"] = ",".join(unknown_sounds)
+            else:
+                new_row = pd.DataFrame([{
+                    "Student Name": student_name,
+                    "Uppercase": ",".join(unknown_upper),
+                    "Lowercase": ",".join(unknown_lower),
+                    "Sounds": ",".join(unknown_sounds),
+                }])
+                updated_state = pd.concat([letter_state_df, new_row], ignore_index=True)
+
+            conn.update(worksheet="Letter State", data=updated_state)
+
+            # 2) Append new assessment row to main data sheet
+            today = date.today().strftime("%m/%d/%Y")
+            new_assessment = pd.DataFrame([{
+                "Student Name": student_name,
+                "Week": today,
+                "Uppercase": len(known_upper),
+                "Lowercase": len(known_lower),
+                "Sound Total": len(known_sounds),
+                "Letter Sound": len(known_sounds),
+            }])
+            main_data = conn.read(ttl="0m")
+            main_cols = main_data.columns.tolist()
+            for col in new_assessment.columns:
+                if col not in main_cols:
+                    new_assessment = new_assessment.drop(columns=[col])
+            updated_main = pd.concat([main_data, new_assessment], ignore_index=True)
+            conn.update(data=updated_main)
+
+            st.cache_data.clear()
+            st.session_state.assess_done = False
+            st.session_state.assess_results = {}
+            st.success(f"Assessment saved for {student_name} ({today}).")
+            st.rerun()
+
+        if discard_clicked:
+            st.session_state.assess_done = False
+            st.session_state.assess_results = {}
             st.rerun()
 
 with tab_pdf:
