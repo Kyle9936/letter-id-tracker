@@ -594,6 +594,40 @@ with tab_assess:
         st.session_state.assess_results = {}
 
     if not st.session_state.assess_active and not st.session_state.assess_done:
+        # --- Assessment History ---
+        with st.expander("Assessment History"):
+            history_student = st.selectbox("Select a student", students, key="history_student")
+            student_history = filtered[filtered["Student Name"] == history_student].sort_values("Week", ascending=False)
+            if student_history.empty:
+                st.info(f"No assessment history for {history_student}.")
+            else:
+                hist_header = "".join(
+                    f'<th style="text-align:left;padding:8px 12px;border-bottom:2px solid #ddd;font-size:13px;">{c}</th>'
+                    for c in ["Date", "Uppercase", "Lowercase", "Total Letter ID %", "Sound Total", "Letter Sound %"]
+                )
+                hist_body = ""
+                for _, r in student_history.iterrows():
+                    hist_body += (
+                        f'<tr>'
+                        f'<td style="padding:6px 12px;font-size:13px;">{r["Week"].strftime("%b %d, %Y")}</td>'
+                        f'<td style="padding:6px 12px;font-size:13px;">{int(r["Uppercase"])}/26</td>'
+                        f'<td style="padding:6px 12px;font-size:13px;">{int(r["Lowercase"])}/26</td>'
+                        f'<td style="padding:6px 12px;min-width:140px;">{progress_bar_html(r["Total Letter ID %"])}</td>'
+                        f'<td style="padding:6px 12px;font-size:13px;">{int(r["Sound Total"])}/26</td>'
+                        f'<td style="padding:6px 12px;min-width:140px;">{progress_bar_html(r["Letter Sound %"])}</td>'
+                        f'</tr>'
+                    )
+                st.markdown(
+                    f'<div style="overflow-x:auto;">'
+                    f'<table style="width:100%;border-collapse:collapse;">'
+                    f'<thead><tr>{hist_header}</tr></thead>'
+                    f'<tbody>{hist_body}</tbody>'
+                    f'</table></div>',
+                    unsafe_allow_html=True,
+                )
+
+        st.divider()
+
         # --- Setup screen ---
         st.caption("Present letters one at a time and record whether the student identifies each one. The assessment covers all three pillars: Uppercase \u2192 Lowercase \u2192 Sounds.")
 
