@@ -371,7 +371,8 @@ with tab_cohort:
         st.markdown(cohort_html, unsafe_allow_html=True)
 
 with tab_ranking:
-    st.subheader(f"Student Ranking - {most_recent_date}")
+    from datetime import date as _date
+    st.subheader(f"Student Ranking - As of {_date.today().strftime('%B %d, %Y')}")
 
     rank_cols = st.columns(2)
 
