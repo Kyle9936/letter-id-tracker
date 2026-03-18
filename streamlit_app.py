@@ -662,9 +662,12 @@ with tab_assess:
 
         # Large letter display
         st.markdown(
-            f'<div style="text-align:center;padding:30px 0;">'
-            f'<span style="font-size:180px;font-weight:700;line-height:1;">{display_letter}</span>'
-            f'</div>',
+            f'<div style="display:flex;justify-content:center;padding:20px 0;">'
+            f'<div style="width:320px;height:320px;display:flex;align-items:center;justify-content:center;'
+            f'border-radius:16px;background:#F5F7FA;border:3px solid #1E88E5;'
+            f'box-shadow:0 4px 20px rgba(30,136,229,0.15);">'
+            f'<span style="font-size:240px;font-weight:700;line-height:1;color:#1a1a1a;">{display_letter}</span>'
+            f'</div></div>',
             unsafe_allow_html=True,
         )
 
