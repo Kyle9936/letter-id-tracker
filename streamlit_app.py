@@ -5,8 +5,6 @@ import matplotlib.pyplot as plt
 import io
 from fpdf import FPDF
 from streamlit_gsheets import GSheetsConnection
-from google import genai
-from google.genai import types
 
 st.set_page_config(
     page_title="Letter Identification Progress Tracker",
@@ -16,6 +14,7 @@ st.set_page_config(
 
 st.title("Letter Identification Progress Tracker")
 
+# Hide Streamlit UI chrome but keep sidebar always visible
 st.markdown(
     """<style>
     [data-testid="manage-app-button"] {display: none;}
@@ -24,33 +23,71 @@ st.markdown(
     .reportview-container .main footer {display: none;}
     footer {display: none;}
     #MainMenu {display: none;}
-    header [data-testid="stToolbar"] {display: none;}
     ._container_gzau3_1 {display: none;}
     ._link_gzau3_10 {display: none;}
     .viewerBadge_container__r5tak {display: none;}
     .viewerBadge_link__qRIco {display: none;}
     [data-testid="stMainMenu"] {display: none;}
-    [data-testid="baseButton-header"] {display: none;}
     .stMainMenu {display: none;}
-    header {visibility: hidden;}
     .stBottom > div {display: none;}
     [data-testid="stBottom"] {display: none;}
+
+    /* Force sidebar to always stay open */
+    [data-testid="stSidebar"] {
+        min-width: 310px !important;
+        max-width: 310px !important;
+        transform: none !important;
+    }
+    [data-testid="stSidebar"] > div:first-child {
+        width: 310px !important;
+    }
+    /* Hide the collapse button so users can't collapse it */
+    button[kind="headerNoPadding"] {
+        display: none !important;
+    }
+    [data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"] {
+        display: none !important;
+    }
     </style>""",
     unsafe_allow_html=True,
 )
-
-SHEET_URL = "https://docs.google.com/spreadsheets/d/1Fegdy8X2EqHGSOyvOTeU_TM4sRYSp1vECd8BTzNwKkw/edit?usp=sharing"
 
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 if st.button("Refresh data", icon=":material/refresh:"):
     st.cache_data.clear()
 
-df = conn.read(spreadsheet=SHEET_URL, ttl="5m")
+df = conn.read(ttl="5m")
 
 if df is None or df.empty:
     st.warning("No data found in the Google Sheet.")
     st.stop()
+
+# Load saved letter toggle state from "Letter State" worksheet
+try:
+    letter_state_df = conn.read(worksheet="Letter State", ttl="5m")
+    if letter_state_df is None or letter_state_df.empty:
+        letter_state_df = pd.DataFrame(columns=["Student Name", "Uppercase", "Lowercase", "Sounds"])
+except Exception:
+    letter_state_df = pd.DataFrame(columns=["Student Name", "Uppercase", "Lowercase", "Sounds"])
+
+def load_saved_toggle_state():
+    """Build a dict of {student: {category: set_of_unknown_letters}} from the Letter State sheet."""
+    saved = {}
+    for _, row in letter_state_df.iterrows():
+        name = row.get("Student Name", "")
+        if not name or pd.isna(name):
+            continue
+        saved[name] = {}
+        for cat in ["Uppercase", "Lowercase", "Sounds"]:
+            val = row.get(cat, "")
+            if pd.isna(val) or str(val).strip() == "":
+                saved[name][cat] = set()
+            else:
+                saved[name][cat] = {l.strip().upper() for l in str(val).split(",")}
+    return saved
+
+saved_toggle_state = load_saved_toggle_state()
 
 required_cols = ["Student Name", "Week", "Uppercase", "Lowercase", "Sound Total", "Letter Sound"]
 missing = [c for c in required_cols if c not in df.columns]
@@ -58,7 +95,7 @@ if missing:
     st.error(f"Missing columns: {', '.join(missing)}")
     st.stop()
 
-df["Week"] = pd.to_datetime(df["Week"])
+df["Week"] = pd.to_datetime(df["Week"], format="mixed")
 df = df.sort_values(["Student Name", "Week"])
 df["Week Label"] = df["Week"].dt.strftime("%b %d, %Y")
 
@@ -76,7 +113,31 @@ with st.sidebar:
         selection_mode="multi",
         default=["Total Letter ID %", "Letter Sound %"],
     )
-    gemini_api_key = st.secrets.get("GEMINI_API_KEY", "") or st.secrets.get("gemini_api_key", "")
+
+    st.divider()
+    with st.expander("Add New Student"):
+        new_student_name = st.text_input("Student Name", key="new_student_name")
+        if st.button("Add Student"):
+            if not new_student_name.strip():
+                st.warning("Enter a student name.")
+            elif new_student_name.strip() in students:
+                st.warning("Student already exists.")
+            else:
+                from datetime import date
+                new_row = pd.DataFrame([{
+                    "Student Name": new_student_name.strip(),
+                    "Week": date.today().strftime("%m/%d/%Y"),
+                    "Uppercase": 0,
+                    "Lowercase": 0,
+                    "Sound Total": 0,
+                    "Letter Sound": 0,
+                }])
+                main_data = conn.read(ttl="0m")
+                updated = pd.concat([main_data, new_row], ignore_index=True)
+                conn.update(data=updated)
+                st.cache_data.clear()
+                st.success(f"Added {new_student_name.strip()}!")
+                st.rerun()
 
 if not selected_students:
     st.warning("Select at least one student.")
@@ -124,48 +185,16 @@ def progress_bar_html(val):
 
 LETTERS = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
-def parse_known_from_unknown(val):
-    all_letters = set(LETTERS)
-    if pd.isna(val) or str(val).strip() == "":
-        return all_letters
-    unknown = {l.strip().upper() for l in str(val).split(",")}
-    return all_letters - unknown
-
-def letter_grid_html(title, known_set, lowercase=False):
-    cells = ""
-    for letter in LETTERS:
-        if letter in known_set:
-            bg = "#66BB6A"
-            color = "#fff"
-        else:
-            bg = "#EF9A9A"
-            color = "#fff"
-        display = letter.lower() if lowercase else letter
-        cells += (
-            f'<div style="display:inline-flex;align-items:center;justify-content:center;'
-            f'width:36px;height:36px;margin:2px;border-radius:4px;'
-            f'background:{bg};color:{color};font-weight:600;font-size:14px;">'
-            f'{display}</div>'
-        )
-    count = len(known_set)
-    return (
-        f'<div style="margin-bottom:12px;">'
-        f'<div style="font-weight:600;font-size:14px;margin-bottom:4px;">{title} ({count}/26)</div>'
-        f'<div style="max-width:480px;">{cells}</div>'
-        f'</div>'
-    )
-
-HAS_LETTER_DETAIL = all(c in df.columns for c in ["Unknown Uppercase", "Unknown Lowercase", "Unknown Sounds"])
-
-tab_scorecard, tab_individual, tab_cohort, tab_ranking, tab_letters, tab_pdf, tab_chat = st.tabs(
-    ["Student Scorecard", "Individual Progress", "Cohort Progress", "Student Ranking", "Letter Detail", "Export PDF", "Data Assistant"]
+tab_scorecard, tab_individual, tab_cohort, tab_ranking, tab_letters, tab_pdf = st.tabs(
+    ["Student Scorecard", "Individual Progress", "Cohort Progress", "Student Ranking", "Letter Detail", "Export PDF"]
 )
 
 with tab_scorecard:
-    st.subheader(f"Student Scorecard - {most_recent_date}")
+    st.subheader("Student Scorecard")
     for idx, (_, row) in enumerate(latest.iterrows()):
         with st.container(border=True):
-            st.markdown(f"**{row['Student Name']}**")
+            student_date = row["Week"].strftime("%m/%d/%Y")
+            st.markdown(f"**{row['Student Name']}** &nbsp;·&nbsp; Last assessed: {student_date}")
             cols = st.columns(5)
             cols[0].metric("Uppercase ID", f"{int(row['Uppercase'])}/26")
             cols[1].metric("Lowercase ID", f"{int(row['Lowercase'])}/26")
@@ -401,33 +430,153 @@ with tab_ranking:
         st.markdown(ls_html, unsafe_allow_html=True)
 
 with tab_letters:
-    st.subheader(f"Letter Detail - {most_recent_date}")
+    st.subheader("Letter Detail")
 
-    if not HAS_LETTER_DETAIL:
-        st.info(
-            "Add columns 'Unknown Uppercase', 'Unknown Lowercase', and 'Unknown Sounds' to your Google Sheet "
-            "with comma-separated letters the student does NOT know (e.g., Q,X,Z) to enable this view."
-        )
-    else:
-        selected_student_detail = st.selectbox("Select a student", students, key="letter_detail_student")
-        student_latest = latest[latest["Student Name"] == selected_student_detail]
+    selected_student_detail = st.selectbox("Select a student", students, key="letter_detail_student")
 
-        if student_latest.empty:
-            st.warning("No data for this student.")
+    # Initialize session state for this student's toggles if not already set
+    # "known" set = letters the student knows. New students default to empty (know nothing).
+    state_key = f"toggles_{selected_student_detail}"
+    if state_key not in st.session_state:
+        saved = saved_toggle_state.get(selected_student_detail, None)
+        # A student with a Letter State row but all-empty unknown sets has no real saved data yet
+        has_saved_data = saved is not None and any(len(saved.get(c, set())) > 0 for c in ["Uppercase", "Lowercase", "Sounds"])
+        if has_saved_data:
+            # Saved state stores UNKNOWN letters; invert to get known
+            st.session_state[state_key] = {
+                "Uppercase": set(LETTERS) - saved.get("Uppercase", set()),
+                "Lowercase": set(LETTERS) - saved.get("Lowercase", set()),
+                "Sounds": set(LETTERS) - saved.get("Sounds", set()),
+            }
         else:
-            row = student_latest.iloc[0]
-            known_upper = parse_known_from_unknown(row.get("Unknown Uppercase", ""))
-            known_lower = parse_known_from_unknown(row.get("Unknown Lowercase", ""))
-            known_sounds = parse_known_from_unknown(row.get("Unknown Sounds", ""))
+            # Brand-new student or no real data: knows nothing
+            st.session_state[state_key] = {
+                "Uppercase": set(),
+                "Lowercase": set(),
+                "Sounds": set(),
+            }
 
-            with st.container(border=True):
-                st.markdown(f"**{selected_student_detail}**")
-                st.markdown(
-                    letter_grid_html("Uppercase Letters", known_upper)
-                    + letter_grid_html("Lowercase Letters", known_lower, lowercase=True)
-                    + letter_grid_html("Letter Sounds", known_sounds),
-                    unsafe_allow_html=True,
-                )
+    def toggle_letter(student, category, letter):
+        key = f"toggles_{student}"
+        if letter in st.session_state[key][category]:
+            st.session_state[key][category].remove(letter)
+        else:
+            st.session_state[key][category].add(letter)
+
+    with st.container(border=True):
+        st.markdown(f"**{selected_student_detail}**")
+        st.caption("Click a letter to toggle between known (green) and unknown (red).")
+
+        # Build CSS to color individual letter buttons green (known) or light red (unknown)
+        toggle_css = []
+        safe_name = selected_student_detail.replace(" ", "_")
+        for cat_key in ["Uppercase", "Lowercase", "Sounds"]:
+            known = st.session_state[state_key][cat_key]
+            for letter in LETTERS:
+                btn_key = f"btn_{safe_name}_{cat_key}_{letter}"
+                if letter in known:
+                    toggle_css.append(
+                        f'.st-key-{btn_key} button '
+                        f'{{ background-color: #09AB3B !important; color: white !important; border: none !important; }}'
+                    )
+                else:
+                    toggle_css.append(
+                        f'.st-key-{btn_key} button '
+                        f'{{ background-color: #EF9A9A !important; color: white !important; border: none !important; }}'
+                    )
+        st.markdown(f'<style>{" ".join(toggle_css)}</style>', unsafe_allow_html=True)
+
+        for cat_label, cat_key, show_lower in [
+            ("Uppercase Letters", "Uppercase", False),
+            ("Lowercase Letters", "Lowercase", True),
+            ("Letter Sounds", "Sounds", False),
+        ]:
+            known = st.session_state[state_key][cat_key]
+            count = len(known)
+            st.markdown(f"**{cat_label} ({count}/26)**")
+
+            # Render 26 buttons in rows of 13
+            for row_start in range(0, 26, 13):
+                cols = st.columns(13)
+                for i, col in enumerate(cols):
+                    idx = row_start + i
+                    letter = LETTERS[idx]
+                    display = letter.lower() if show_lower else letter
+                    col.button(
+                        display,
+                        key=f"btn_{safe_name}_{cat_key}_{letter}",
+                        on_click=toggle_letter,
+                        args=(selected_student_detail, cat_key, letter),
+                        use_container_width=True,
+                    )
+
+        # Auto-computed scores
+        upper_count = len(st.session_state[state_key]["Uppercase"])
+        lower_count = len(st.session_state[state_key]["Lowercase"])
+        sound_count = len(st.session_state[state_key]["Sounds"])
+        tid_pct = round((upper_count + lower_count) / 52 * 100, 1)
+        ls_pct = round(sound_count / 26 * 100, 1)
+
+        st.divider()
+        st.markdown("**Auto-Computed Scores**")
+        score_cols = st.columns(5)
+        score_cols[0].metric("Uppercase ID", f"{upper_count}/26")
+        score_cols[1].metric("Lowercase ID", f"{lower_count}/26")
+        score_cols[2].metric("Total Letter ID", f"{tid_pct:.0f}%")
+        score_cols[3].metric("Sound Total", f"{sound_count}/26")
+        score_cols[4].metric("Letter Sound", f"{ls_pct:.0f}%")
+
+        # Save Assessment button
+        st.divider()
+        if st.button("Save Assessment", type="primary", icon=":material/save:", key="save_assessment"):
+            from datetime import date
+
+            # Compute unknown letters (inverse of known) for storage
+            unknown_upper = sorted(set(LETTERS) - st.session_state[state_key]["Uppercase"])
+            unknown_lower = sorted(set(LETTERS) - st.session_state[state_key]["Lowercase"])
+            unknown_sounds = sorted(set(LETTERS) - st.session_state[state_key]["Sounds"])
+
+            # 1) Update Letter State worksheet
+            existing_names = letter_state_df["Student Name"].tolist() if not letter_state_df.empty else []
+            if selected_student_detail in existing_names:
+                updated_state = letter_state_df.copy()
+                mask = updated_state["Student Name"] == selected_student_detail
+                updated_state.loc[mask, "Uppercase"] = ",".join(unknown_upper)
+                updated_state.loc[mask, "Lowercase"] = ",".join(unknown_lower)
+                updated_state.loc[mask, "Sounds"] = ",".join(unknown_sounds)
+            else:
+                new_row = pd.DataFrame([{
+                    "Student Name": selected_student_detail,
+                    "Uppercase": ",".join(unknown_upper),
+                    "Lowercase": ",".join(unknown_lower),
+                    "Sounds": ",".join(unknown_sounds),
+                }])
+                updated_state = pd.concat([letter_state_df, new_row], ignore_index=True)
+
+            conn.update(worksheet="Letter State", data=updated_state)
+
+            # 2) Append new assessment row to main data sheet
+            today = date.today().strftime("%m/%d/%Y")
+            new_assessment = pd.DataFrame([{
+                "Student Name": selected_student_detail,
+                "Week": today,
+                "Uppercase": upper_count,
+                "Lowercase": lower_count,
+                "Sound Total": sound_count,
+                "Letter Sound": sound_count,
+            }])
+            main_data = conn.read(ttl="0m")
+            # Keep only the required columns that exist in the main sheet
+            main_cols = main_data.columns.tolist()
+            for col in new_assessment.columns:
+                if col not in main_cols:
+                    new_assessment = new_assessment.drop(columns=[col])
+            updated_main = pd.concat([main_data, new_assessment], ignore_index=True)
+            conn.update(data=updated_main)
+
+            st.cache_data.clear()
+            st.success(f"Assessment saved for {selected_student_detail} ({today}).")
+            st.rerun()
 
 with tab_pdf:
     st.subheader("Export PDF Report")
@@ -510,11 +659,12 @@ with tab_pdf:
                 pdf.image(buf, x=pdf.l_margin, w=170)
                 pdf.ln(4)
 
-            # Letter detail grids (if available)
-            if HAS_LETTER_DETAIL:
-                known_upper = parse_known_from_unknown(row.get("Unknown Uppercase", ""))
-                known_lower = parse_known_from_unknown(row.get("Unknown Lowercase", ""))
-                known_sounds = parse_known_from_unknown(row.get("Unknown Sounds", ""))
+            # Letter detail grids from saved toggle state
+            if name in saved_toggle_state:
+                unknown = saved_toggle_state[name]
+                known_upper = set(LETTERS) - unknown.get("Uppercase", set())
+                known_lower = set(LETTERS) - unknown.get("Lowercase", set())
+                known_sounds = set(LETTERS) - unknown.get("Sounds", set())
 
                 for label, known, is_lower in [("Uppercase Letters", known_upper, False), ("Lowercase Letters", known_lower, True), ("Letter Sounds", known_sounds, False)]:
                     pdf.set_font("Helvetica", "B", 12)
@@ -551,69 +701,3 @@ with tab_pdf:
             file_name=f"Letter_ID_Report_{file_label}.pdf",
             mime="application/pdf",
         )
-
-with tab_chat:
-    if not gemini_api_key:
-        st.info("Add your Gemini API key to Streamlit secrets (GEMINI_API_KEY) to start asking questions about your data.", icon=":material/key:")
-    else:
-        if "chat_messages" not in st.session_state:
-            st.session_state.chat_messages = []
-
-        data_summary = filtered.to_csv(index=False)
-
-        system_prompt = (
-            "You are a helpful teaching assistant analyzing student letter identification progress data. "
-            "You have access to the following student data:\n\n"
-            f"{data_summary}\n\n"
-            "Columns explained:\n"
-            "- Student Name: the student's name\n"
-            "- Week: the date of the assessment\n"
-            "- Uppercase: number of uppercase letters identified (out of 26)\n"
-            "- Lowercase: number of lowercase letters identified (out of 26)\n"
-            "- Sound Total: number of letter sounds identified (out of 26)\n"
-            "- Letter Sound: number of letter sounds identified (out of 26)\n"
-            "- Total Letter ID %: combined uppercase + lowercase as a percentage of 52\n"
-            "- Letter Sound %: letter sounds as a percentage of 26\n"
-            "- Unknown Uppercase: comma-separated list of specific uppercase letters the student does NOT know\n"
-            "- Unknown Lowercase: comma-separated list of specific lowercase letters the student does NOT know\n"
-            "- Unknown Sounds: comma-separated list of specific letter sounds the student does NOT know\n\n"
-            "Answer questions clearly and concisely. When discussing performance, reference the color thresholds: "
-            "green (80%+), yellow (65-79%), orange (40-64%), red (below 40%). "
-            "Provide actionable insights when possible."
-        )
-
-        for msg in st.session_state.chat_messages:
-            with st.chat_message(msg["role"]):
-                st.markdown(msg["content"])
-
-        if prompt := st.chat_input("Ask a question about your student data..."):
-            st.session_state.chat_messages.append({"role": "user", "content": prompt})
-            with st.chat_message("user"):
-                st.markdown(prompt)
-
-            client = genai.Client(api_key=gemini_api_key)
-            contents = [
-                types.Content(
-                    role="user" if m["role"] == "user" else "model",
-                    parts=[types.Part.from_text(text=m["content"])],
-                )
-                for m in st.session_state.chat_messages
-            ]
-
-            with st.chat_message("assistant"):
-                try:
-                    response = client.models.generate_content(
-                        model="gemini-2.5-flash",
-                        contents=contents,
-                        config=types.GenerateContentConfig(
-                            system_instruction=system_prompt,
-                        ),
-                    )
-                    reply = response.text
-                    st.markdown(reply)
-                except Exception as e:
-                    reply = None
-                    st.error(f"Gemini API error: {e}")
-
-            if reply:
-                st.session_state.chat_messages.append({"role": "assistant", "content": reply})
