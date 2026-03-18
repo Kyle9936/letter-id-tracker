@@ -194,7 +194,7 @@ with tab_scorecard:
     for idx, (_, row) in enumerate(latest.iterrows()):
         with st.container(border=True):
             student_date = row["Week"].strftime("%m/%d/%Y")
-            st.markdown(f"**{row['Student Name']}** &nbsp;·&nbsp; Last assessed: {student_date}")
+            st.markdown(f"<b>{row['Student Name']}</b> &nbsp;·&nbsp; Last assessed: {student_date}", unsafe_allow_html=True)
             cols = st.columns(5)
             cols[0].metric("Uppercase ID", f"{int(row['Uppercase'])}/26")
             cols[1].metric("Lowercase ID", f"{int(row['Lowercase'])}/26")
@@ -223,7 +223,7 @@ with tab_individual:
         metric_order = ["Total Letter ID %", "Letter Sound %"]
 
         with st.container(border=True):
-            st.markdown(f"**{student}**")
+            st.markdown(f"<b>{student}</b>", unsafe_allow_html=True)
 
             bars = (
                 alt.Chart(student_melted)
@@ -306,7 +306,7 @@ with tab_cohort:
     cohort_melted["Label"] = cohort_melted["Score (%)"].round(0).astype(int).astype(str) + "%"
 
     with st.container(border=True):
-        st.markdown(f"**All selected students** ({len(selected_students)} students)")
+        st.markdown(f"<b>All selected students</b> ({len(selected_students)} students)", unsafe_allow_html=True)
 
         cohort_metric_order = ["Total Letter ID %", "Letter Sound %"]
 
@@ -376,7 +376,7 @@ with tab_ranking:
     rank_cols = st.columns(2)
 
     with rank_cols[0]:
-        st.markdown("**Total Letter ID %**")
+        st.markdown("<b>Total Letter ID %</b>", unsafe_allow_html=True)
         tid_ranked = latest[["Student Name", "Total Letter ID %"]].sort_values("Total Letter ID %", ascending=False).reset_index(drop=True)
         tid_ranked.index += 1
         tid_header = (
@@ -403,7 +403,7 @@ with tab_ranking:
         st.markdown(tid_html, unsafe_allow_html=True)
 
     with rank_cols[1]:
-        st.markdown("**Letter Sound %**")
+        st.markdown("<b>Letter Sound %</b>", unsafe_allow_html=True)
         ls_ranked = latest[["Student Name", "Letter Sound %"]].sort_values("Letter Sound %", ascending=False).reset_index(drop=True)
         ls_ranked.index += 1
         ls_header = (
@@ -464,7 +464,7 @@ with tab_letters:
             st.session_state[key][category].add(letter)
 
     with st.container(border=True):
-        st.markdown(f"**{selected_student_detail}**")
+        st.markdown(f"<b>{selected_student_detail}</b>", unsafe_allow_html=True)
         st.caption("Click a letter to toggle between known (green) and unknown (red).")
 
         # Build CSS to color individual letter buttons green (known) or light red (unknown)
@@ -493,7 +493,7 @@ with tab_letters:
         ]:
             known = st.session_state[state_key][cat_key]
             count = len(known)
-            st.markdown(f"**{cat_label} ({count}/26)**")
+            st.markdown(f"<b>{cat_label} ({count}/26)</b>", unsafe_allow_html=True)
 
             # Render 26 buttons in rows of 13
             for row_start in range(0, 26, 13):
@@ -518,7 +518,7 @@ with tab_letters:
         ls_pct = round(sound_count / 26 * 100, 1)
 
         st.divider()
-        st.markdown("**Auto-Computed Scores**")
+        st.markdown("<b>Auto-Computed Scores</b>", unsafe_allow_html=True)
         score_cols = st.columns(5)
         score_cols[0].metric("Uppercase ID", f"{upper_count}/26")
         score_cols[1].metric("Lowercase ID", f"{lower_count}/26")
