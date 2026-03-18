@@ -490,7 +490,7 @@ with tab_letters:
         for cat_label, cat_key, show_lower in [
             ("Uppercase Letters", "Uppercase", False),
             ("Lowercase Letters", "Lowercase", True),
-            ("Letter Sounds", "Sounds", False),
+            ("Letter Sounds", "Sounds", True),
         ]:
             known = st.session_state[state_key][cat_key]
             count = len(known)
@@ -690,7 +690,7 @@ with tab_assess:
         st.progress(overall_progress / 78, text=f"Letter {idx + 1} of 26")
 
         current_letter = order[idx]
-        if phase == "Lowercase":
+        if phase == "Lowercase" or phase == "Sounds":
             display_letter = current_letter.lower()
         else:
             display_letter = current_letter
@@ -701,7 +701,7 @@ with tab_assess:
             f'<div style="width:320px;height:320px;display:flex;align-items:center;justify-content:center;'
             f'border-radius:16px;background:#F5F7FA;border:3px solid #1E88E5;'
             f'box-shadow:0 4px 20px rgba(30,136,229,0.15);">'
-            f'<span style="font-size:240px;font-weight:700;line-height:1;color:#1a1a1a;">{display_letter}</span>'
+            f'<span style="font-size:240px;font-weight:700;line-height:1;color:#1a1a1a;font-family:\'Comic Sans MS\',\'Comic Sans\',cursive;">{display_letter}</span>'
             f'</div></div>',
             unsafe_allow_html=True,
         )
@@ -771,7 +771,7 @@ with tab_assess:
         for pillar_label, pillar_key, show_lower in [
             ("Uppercase Letters", "Uppercase", False),
             ("Lowercase Letters", "Lowercase", True),
-            ("Letter Sounds", "Sounds", False),
+            ("Letter Sounds", "Sounds", True),
         ]:
             pillar_results = results[pillar_key]
             pillar_identified = sum(1 for v in pillar_results.values() if v)
