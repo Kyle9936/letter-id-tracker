@@ -185,8 +185,9 @@ def progress_bar_html(val):
 
 LETTERS = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
-tab_scorecard, tab_individual, tab_cohort, tab_ranking, tab_letters, tab_assess, tab_pdf = st.tabs(
-    ["Student Scorecard", "Individual Progress", "Cohort Progress", "Student Ranking", "Letter Detail", "Live Assessment", "Export PDF"]
+tab_scorecard, tab_individual, tab_cohort, tab_ranking, tab_prepost, tab_letters, tab_assess, tab_pdf = st.tabs(
+    ["Student Scorecard", "Individual Progress", "Cohort Progress", "Student Ranking",
+     "Pre/Post Comparison", "Letter Detail", "Live Assessment", "Export PDF"]
 )
 
 with tab_scorecard:
@@ -429,6 +430,178 @@ with tab_ranking:
             f'</table></div>'
         )
         st.markdown(ls_html, unsafe_allow_html=True)
+
+with tab_prepost:
+    st.subheader("Pre/Post Comparison")
+    st.caption(
+        "Compare each student's baseline (first assessment) against their most recent assessment "
+        "to measure growth. This view supports pre/post analysis for evaluating the impact of the "
+        "UFLI assessment and reteaching intervention."
+    )
+
+    # Pre = earliest assessment, Post = latest assessment per student
+    earliest = filtered.loc[filtered.groupby("Student Name")["Week"].idxmin()]
+
+    # Only include students with at least 2 assessments
+    assess_counts = filtered.groupby("Student Name")["Week"].count()
+    multi_assess_students = assess_counts[assess_counts >= 2].index.tolist()
+    single_assess_students = assess_counts[assess_counts < 2].index.tolist()
+
+    if single_assess_students:
+        st.info(
+            f"Students with only 1 assessment (excluded from comparison): "
+            f"{', '.join(single_assess_students)}"
+        )
+
+    if not multi_assess_students:
+        st.warning("No students have multiple assessments yet. Complete at least two assessments per student to see a comparison.")
+    else:
+        pre_df = earliest[earliest["Student Name"].isin(multi_assess_students)].set_index("Student Name")
+        post_df = latest[latest["Student Name"].isin(multi_assess_students)].set_index("Student Name")
+
+        # ── Cohort summary metrics ──
+        avg_pre_tid = pre_df["Total Letter ID %"].mean()
+        avg_post_tid = post_df["Total Letter ID %"].mean()
+        avg_pre_ls = pre_df["Letter Sound %"].mean()
+        avg_post_ls = post_df["Letter Sound %"].mean()
+        delta_tid = avg_post_tid - avg_pre_tid
+        delta_ls = avg_post_ls - avg_pre_ls
+        num_improved = sum(
+            1 for s in multi_assess_students
+            if post_df.loc[s, "Total Letter ID %"] > pre_df.loc[s, "Total Letter ID %"]
+            or post_df.loc[s, "Letter Sound %"] > pre_df.loc[s, "Letter Sound %"]
+        )
+
+        with st.container(border=True):
+            st.markdown("<b>Cohort Summary</b>", unsafe_allow_html=True)
+            m_cols = st.columns(4)
+            m_cols[0].metric("Avg Pre Total Letter ID", f"{avg_pre_tid:.1f}%")
+            m_cols[1].metric("Avg Post Total Letter ID", f"{avg_post_tid:.1f}%", delta=f"{delta_tid:+.1f}%")
+            m_cols[2].metric("Avg Pre Letter Sound", f"{avg_pre_ls:.1f}%")
+            m_cols[3].metric("Avg Post Letter Sound", f"{avg_post_ls:.1f}%", delta=f"{delta_ls:+.1f}%")
+
+            st.caption(
+                f"{num_improved} of {len(multi_assess_students)} students showed growth "
+                f"in at least one metric."
+            )
+
+        # ── Pre vs Post grouped bar chart ──
+        chart_rows = []
+        for s in sorted(multi_assess_students):
+            chart_rows.append({"Student": s, "Assessment": "Pre", "Total Letter ID %": pre_df.loc[s, "Total Letter ID %"], "Letter Sound %": pre_df.loc[s, "Letter Sound %"]})
+            chart_rows.append({"Student": s, "Assessment": "Post", "Total Letter ID %": post_df.loc[s, "Total Letter ID %"], "Letter Sound %": post_df.loc[s, "Letter Sound %"]})
+        chart_df = pd.DataFrame(chart_rows)
+
+        for metric_name in [m for m in metrics]:
+            if metric_name not in chart_df.columns:
+                continue
+            melted = chart_df[["Student", "Assessment", metric_name]].copy()
+            melted.columns = ["Student", "Assessment", "Score"]
+            melted["Label"] = melted["Score"].round(0).astype(int).astype(str) + "%"
+
+            with st.container(border=True):
+                st.markdown(f"<b>{metric_name}</b>", unsafe_allow_html=True)
+                bars = (
+                    alt.Chart(melted)
+                    .mark_bar()
+                    .encode(
+                        x=alt.X("Student:N", title="Student", axis=alt.Axis(labelAngle=0)),
+                        y=alt.Y("Score:Q", title="Score (%)", scale=alt.Scale(domain=[0, 100])),
+                        color=alt.Color(
+                            "Assessment:N",
+                            scale=alt.Scale(domain=["Pre", "Post"], range=["#FFB74D", "#66BB6A"]),
+                            legend=alt.Legend(title="Assessment"),
+                        ),
+                        xOffset=alt.XOffset("Assessment:N", sort=["Pre", "Post"]),
+                        tooltip=["Student", "Assessment", "Score"],
+                    )
+                )
+                labels = (
+                    alt.Chart(melted)
+                    .mark_text(dy=-8, fontSize=11)
+                    .encode(
+                        x=alt.X("Student:N"),
+                        y=alt.Y("Score:Q"),
+                        text="Label:N",
+                        xOffset=alt.XOffset("Assessment:N", sort=["Pre", "Post"]),
+                    )
+                )
+                st.altair_chart(bars + labels, width="stretch")
+
+        # ── Detailed comparison table ──
+        with st.container(border=True):
+            st.markdown("<b>Detailed Comparison</b>", unsafe_allow_html=True)
+
+            def delta_html(pre_val, post_val, is_pct=False):
+                diff = post_val - pre_val
+                if diff > 0:
+                    color = "#09AB3B"
+                    arrow = "&#9650;"  # ▲
+                elif diff < 0:
+                    color = "#FF2B2B"
+                    arrow = "&#9660;"  # ▼
+                else:
+                    color = "#999"
+                    arrow = "&#8212;"  # —
+                fmt = f"{diff:+.1f}%" if is_pct else f"{diff:+.0f}"
+                return f'<span style="color:{color};font-weight:600;">{arrow} {fmt}</span>'
+
+            tbl_header_cols = [
+                "Student", "Pre Date", "Post Date",
+                "Pre Upper", "Post Upper", "\u0394",
+                "Pre Lower", "Post Lower", "\u0394",
+                "Pre Letter ID %", "Post Letter ID %", "\u0394",
+                "Pre Sounds", "Post Sounds", "\u0394",
+                "Pre Sound %", "Post Sound %", "\u0394",
+            ]
+            tbl_header = "".join(
+                f'<th style="text-align:left;padding:6px 8px;border-bottom:2px solid #ddd;font-size:12px;white-space:nowrap;">{c}</th>'
+                for c in tbl_header_cols
+            )
+
+            tbl_body = ""
+            for s in sorted(multi_assess_students):
+                pre = pre_df.loc[s]
+                post = post_df.loc[s]
+                pre_date = pre["Week"].strftime("%b %d, %Y")
+                post_date = post["Week"].strftime("%b %d, %Y")
+                pre_u = int(pre["Uppercase"]); post_u = int(post["Uppercase"])
+                pre_l = int(pre["Lowercase"]); post_l = int(post["Lowercase"])
+                pre_tid = pre["Total Letter ID %"]; post_tid = post["Total Letter ID %"]
+                pre_s = int(pre["Sound Total"]); post_s = int(post["Sound Total"])
+                pre_ls = pre["Letter Sound %"]; post_ls = post["Letter Sound %"]
+
+                tbl_body += (
+                    f'<tr>'
+                    f'<td style="padding:6px 8px;font-size:13px;font-weight:600;">{s}</td>'
+                    f'<td style="padding:6px 8px;font-size:12px;">{pre_date}</td>'
+                    f'<td style="padding:6px 8px;font-size:12px;">{post_date}</td>'
+                    f'<td style="padding:6px 8px;font-size:13px;">{pre_u}/26</td>'
+                    f'<td style="padding:6px 8px;font-size:13px;">{post_u}/26</td>'
+                    f'<td style="padding:6px 8px;font-size:13px;">{delta_html(pre_u, post_u)}</td>'
+                    f'<td style="padding:6px 8px;font-size:13px;">{pre_l}/26</td>'
+                    f'<td style="padding:6px 8px;font-size:13px;">{post_l}/26</td>'
+                    f'<td style="padding:6px 8px;font-size:13px;">{delta_html(pre_l, post_l)}</td>'
+                    f'<td style="padding:6px 8px;min-width:100px;">{progress_bar_html(pre_tid)}</td>'
+                    f'<td style="padding:6px 8px;min-width:100px;">{progress_bar_html(post_tid)}</td>'
+                    f'<td style="padding:6px 8px;font-size:13px;">{delta_html(pre_tid, post_tid, True)}</td>'
+                    f'<td style="padding:6px 8px;font-size:13px;">{pre_s}/26</td>'
+                    f'<td style="padding:6px 8px;font-size:13px;">{post_s}/26</td>'
+                    f'<td style="padding:6px 8px;font-size:13px;">{delta_html(pre_s, post_s)}</td>'
+                    f'<td style="padding:6px 8px;min-width:100px;">{progress_bar_html(pre_ls)}</td>'
+                    f'<td style="padding:6px 8px;min-width:100px;">{progress_bar_html(post_ls)}</td>'
+                    f'<td style="padding:6px 8px;font-size:13px;">{delta_html(pre_ls, post_ls, True)}</td>'
+                    f'</tr>'
+                )
+
+            st.markdown(
+                f'<div style="overflow-x:auto;">'
+                f'<table style="width:100%;border-collapse:collapse;">'
+                f'<thead><tr>{tbl_header}</tr></thead>'
+                f'<tbody>{tbl_body}</tbody>'
+                f'</table></div>',
+                unsafe_allow_html=True,
+            )
 
 with tab_letters:
     st.subheader("Letter Detail")
